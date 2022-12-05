@@ -74,24 +74,23 @@ typedef union __attribute((packed)) {
 	} LVALUEDATA;
 
 typedef struct __attribute((packed)) {
-  LVALUEDATA    d;              /* data pointed to by LVALUE */
-  uint8_t type;			/* type of variable (STRID or FLTID or INTID or B_ERROR) */   
+  LVALUEDATA    d;              // data pointed to by LVALUE
+  uint8_t type;			// type of variable (STRID or FLTID or INTID or B_ERROR)
 	} LVALUE;
 
 typedef struct __attribute((packed)) {
-  char id[IDLENGTH];			/* id of control variable */
+  char id[IDLENGTH];			// id of control variable
   uint8_t filler;
-  LINE_NUMBER_TYPE nextline;	/* line below FOR to which control passes */
-  NUM_TYPE toval;			/* terminal value */
-  NUM_TYPE step;			/* step size */
+  LINE_NUMBER_STMT_POS_TYPE nextline;	// line/stmt after FOR to which control passes
+  NUM_TYPE toval;			// terminal value
+  NUM_TYPE step;			// step size
 	} FORLOOP;
-#warning USARE PUNTATORE allo Script al posto del line_number, cosi dovrebbe gestire multistatement :
 
 typedef struct __attribute((packed)) _MINIBASIC {
   //OCCHIO ALLINEAMENTI!
   FORLOOP forStack[MAXFORS];   // stack for FOR loop control 
-  LINE_NUMBER_TYPE gosubStack[MAXGOSUB];		// GOSUB stack
-  LINE_NUMBER_TYPE doStack[MAXFORS];		// DO stack - same # allowed as for's
+  LINE_NUMBER_STMT_POS_TYPE gosubStack[MAXGOSUB];		// GOSUB stack
+  LINE_NUMBER_STMT_POS_TYPE doStack[MAXFORS];		// DO stack - same # allowed as for's
   uint8_t nfors;					// number of fors on stack
   uint8_t ngosubs;
   uint8_t ndos;
@@ -114,13 +113,13 @@ typedef struct __attribute((packed)) _MINIBASIC {
   HWND hWnd;
   THREAD *threadID;
 
-  enum INTERPRETER_ERRORS errorFlag;           // set when error in input encountered
+  enum __attribute__ ((__packed__)) INTERPRETER_ERRORS errorFlag;           // set when error in input encountered
   uint8_t lastExprType;
   uint8_t nfiles;
   uint8_t incomingChar[2];
   
   struct __attribute((packed)) EVENT_HANDLER errorHandler,irqHandler,timerHandler;
-  uint8_t filler[3];
+  uint8_t filler[1];
   
   COLORREF Color,ColorBK;
   POINT Cursor;

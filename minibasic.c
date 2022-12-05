@@ -14,7 +14,7 @@
  *          2021: PC_PIC motherboard, PIC32MZ
 *****************************************************************/
 
-// NEXT i% non sembra andare, senza variabile.. INVECE SI'! ma non sulla stessa riga (come pure do..loop) SISTEMARE
+// cose tipo BEEP non danno errore se manca parametro...
 // if con doppia condizione non va... e/o dà syntax error. v. MANDEL
 // inserire righe non va ancora/è da fare e run pure (v.)
 //   ci vogliono PARENTESI se doppia condizione! ossia pare <= ha priorità inferiore a AND... SISTEMARE
@@ -64,7 +64,7 @@ extern APP_DATA appData;
 extern BYTE SDcardOK,USBmemOK,HDOK,FDOK;
 extern BYTE *RAMdiscArea;
 
-#define MINIBASIC_COPYRIGHT_STRING "MiniBasic for PIC32MZ v2.2.3 - 8/10/2022\n"
+#define MINIBASIC_COPYRIGHT_STRING "MiniBasic for PIC32MZ v2.2.5 - 5/12/2022\n"
 
 
 #undef stricmp    // per at_winc1500 ... £$%@#
@@ -114,6 +114,8 @@ extern DWORD extRAMtot;
 #define DIESIS 33
 //#define AMPERSAND 38
 
+#define STMT_CONTINUE 0   // in teoria LINE=0 e POS=0 non arrivano mai...
+#define STMT_STOP (-1)
 
 enum __attribute((packed)) {
 	DIV=90,
@@ -131,6 +133,7 @@ enum __attribute((packed)) {
 
 	PRINT,PRINT2,
 	LET,
+  CLR,
 	DEF,
 	DIM,
 	IF,
@@ -246,6 +249,7 @@ enum __attribute((packed)) {
 	TRIMSTRING,
 	TIMESTRING,
 	INKEYSTRING,
+	GETKEYSTRING,
 	MIDISTRING,
 	MODEMSTRING,
 #ifdef USA_BREAKTHROUGH
@@ -286,7 +290,7 @@ static void doSetBkcolor(MINIBASIC *);
 static void doBitblt(MINIBASIC *);
 
 
-BSTATIC int inkey(void);
+//BSTATIC int inkey(void);
   
 static const char * const error_msgs[] = {
 	"",
@@ -301,6 +305,7 @@ static const char * const error_msgs[] = {
 	"Too many nested FOR or DO",
 	"FOR/DO without matching NEXT/LOOP",    //10
 	"NEXT/LOOP without matching FOR/DO",
+	"No such line",
 	"Divide by zero",
 	"Negative logarithm",
 	"Negative square root",
@@ -308,7 +313,7 @@ static const char * const error_msgs[] = {
 	"End of input file",
 	"Illegal offset",
 	"Type mismatch",
-	"Input too long",
+	"Input too long",   //20
 	"Bad value",
 	"Not an integer",
 	"Too many GOSUB",
@@ -328,6 +333,7 @@ static TOKEN_LIST const tl[] = {
 	{ "PRINT",5 },
 	{ "?",1 },
 	{ "LET",3 },
+	{ "CLR",3 },
 	{ "DEF",3 },
 	{ "DIM",3 },
 	{ "IF",2 },
@@ -445,6 +451,7 @@ static TOKEN_LIST const tl[] = {
 	{ "TRIM$",5 },
 	{ "TIME$",5 },
 	{ "INKEY$",6 },
+	{ "GETKEY$",7 },
 	{ "MIDI$",5 },
 	{ "MODEM$",6 },
 #ifdef USA_BREAKTHROUGH
@@ -468,29 +475,31 @@ BSTATIC int setup(MINIBASIC *,char *script);
 BSTATIC void cleanup(MINIBASIC *,uint8_t);
 BSTATIC void subClose(MINIBASIC *,int f);
 
-BSTATIC void reportError(MINIBASIC *,LINE_NUMBER_TYPE lineno);
+BSTATIC void reportError(MINIBASIC *,int16_t lineno);
 BSTATIC int16_t findLine(MINIBASIC *,LINE_NUMBER_TYPE no);
-BSTATIC int16_t findDef(MINIBASIC *,const char *id,char **);
+BSTATIC int16_t findDef(MINIBASIC *,const char *id);
 BSTATIC VARIABLE *addNewVar(MINIBASIC *mInstance,const char *id, char type);
 
-BSTATIC LINE_NUMBER_TYPE line(MINIBASIC *);
+BSTATIC LINE_NUMBER_STMT_POS_TYPE line(MINIBASIC *);
 BSTATIC void doPrint(MINIBASIC *);
 BSTATIC void doLet(MINIBASIC *,int8_t);
+BSTATIC void doClr(MINIBASIC *);
 BSTATIC void doDef(MINIBASIC *);
 BSTATIC void doDim(MINIBASIC *);
-BSTATIC LINE_NUMBER_TYPE doIf(MINIBASIC *);
-BSTATIC LINE_NUMBER_TYPE doGoto(MINIBASIC *);
-BSTATIC LINE_NUMBER_TYPE doGosub(MINIBASIC *);
-BSTATIC LINE_NUMBER_TYPE doReturn(MINIBASIC *);
-BSTATIC LINE_NUMBER_TYPE doOn(MINIBASIC *);
+BSTATIC LINE_NUMBER_STMT_POS_TYPE doIf(MINIBASIC *);
+BSTATIC LINE_NUMBER_STMT_POS_TYPE subGoto(MINIBASIC *,uint16_t);
+BSTATIC LINE_NUMBER_STMT_POS_TYPE doGoto(MINIBASIC *);
+BSTATIC LINE_NUMBER_STMT_POS_TYPE doGosub(MINIBASIC *);
+BSTATIC LINE_NUMBER_STMT_POS_TYPE doReturn(MINIBASIC *);
+BSTATIC LINE_NUMBER_STMT_POS_TYPE doOn(MINIBASIC *);
 BSTATIC void doInput(MINIBASIC *);
 BSTATIC void doGet(MINIBASIC *);
 BSTATIC void doPut(MINIBASIC *);
 BSTATIC void doRem(MINIBASIC *);
-BSTATIC LINE_NUMBER_TYPE doFor(MINIBASIC *);
-BSTATIC LINE_NUMBER_TYPE doNext(MINIBASIC *);
-BSTATIC LINE_NUMBER_TYPE doDo(MINIBASIC *);
-BSTATIC LINE_NUMBER_TYPE doLoop(MINIBASIC *);
+BSTATIC LINE_NUMBER_STMT_POS_TYPE doFor(MINIBASIC *);
+BSTATIC LINE_NUMBER_STMT_POS_TYPE doNext(MINIBASIC *);
+BSTATIC LINE_NUMBER_STMT_POS_TYPE doDo(MINIBASIC *);
+BSTATIC LINE_NUMBER_STMT_POS_TYPE doLoop(MINIBASIC *);
 BSTATIC void doPoke(MINIBASIC *);
 BSTATIC void doEEPoke(MINIBASIC *);
 BSTATIC void doOpen(MINIBASIC *);
@@ -516,7 +525,7 @@ BSTATIC void doRD(MINIBASIC *);
 BSTATIC void doMD(MINIBASIC *);
 BSTATIC void doCls(MINIBASIC *);
 BSTATIC void doLocate(MINIBASIC *);
-BSTATIC LINE_NUMBER_TYPE doRun(MINIBASIC *);
+BSTATIC int16_t doRun(MINIBASIC *);
 BSTATIC void doShell(MINIBASIC *);
 BSTATIC void doContinue(MINIBASIC *);
 BSTATIC void doList(MINIBASIC *);
@@ -571,6 +580,7 @@ BSTATIC char *hexString(MINIBASIC *);
 BSTATIC char *trimString(MINIBASIC *);
 BSTATIC char *timeString(MINIBASIC *);
 BSTATIC char *inkeyString(MINIBASIC *);
+BSTATIC char *getkeyString(MINIBASIC *);
 BSTATIC char *midiString(MINIBASIC *);
 BSTATIC char *modemString(MINIBASIC *);
 #ifdef USA_BREAKTHROUGH
@@ -591,7 +601,8 @@ BSTATIC int integer(MINIBASIC *,NUM_TYPE x);
 
 BSTATIC void match(MINIBASIC *,TOKEN_NUM tok);
 BSTATIC void setError(MINIBASIC *,enum INTERPRETER_ERRORS errorcode);
-BSTATIC LINE_NUMBER_TYPE getNextLine(const char *str);
+BSTATIC LINE_NUMBER_TYPE getNextLine(MINIBASIC *,const char *str);
+BSTATIC LINE_NUMBER_STMT_POS_TYPE getNextStatement(MINIBASIC *,const char *str);
 BSTATIC TOKEN_NUM getToken(const char *str);
 BSTATIC uint8_t tokenLen(MINIBASIC *,const char *str, TOKEN_NUM token);
 
@@ -807,7 +818,7 @@ execline:
                 hInstance->string = cmdPointer;
                 hInstance->token = getToken(hInstance->string);
                 hInstance->errorFlag = 0;
-                i = line(hInstance);
+                /*i = (int)*/line(hInstance);
                 if(hInstance->errorFlag) {
                   myTextOut(hInstance,error_msgs[hInstance->errorFlag]);
                   ErrorBeep(200);
@@ -909,11 +920,11 @@ fine:
 */
 
 int basic(MINIBASIC *mInstance,const char *script,BYTE where) {
-  int16_t /*LINE_NUMBER_TYPE per marker fine*/ nextline;
+  LINE_NUMBER_STMT_POS_TYPE nextstmt;
   int answer = 0;
 
   mInstance->incomingChar[0]=mInstance->incomingChar[1]=0;
-  mInstance->errorFlag=0;
+  mInstance->errorFlag=ERR_CLEAR;
   
   mInstance->curline=0;
 
@@ -954,17 +965,18 @@ int basic(MINIBASIC *mInstance,const char *script,BYTE where) {
 #endif
   
   
- 	while(mInstance->curline != -1) {			//Loop through Script Running each Line
+  mInstance->string = mInstance->lines[mInstance->curline].str;
+ 	for(;;) {			//Loop through Script Running each Line
 
-		mInstance->string = mInstance->lines[mInstance->curline].str;
 		mInstance->token = getToken(mInstance->string);
 		
-		mInstance->errorFlag = 0;
+		mInstance->errorFlag=ERR_CLEAR;
 		
-    match(mInstance,VALUE);
-		nextline = line(mInstance);
+    if(mInstance->token == VALUE)   // se siamo a inizio di una riga...
+      match(mInstance,VALUE);
+		nextstmt = line(mInstance);
     
-		if(mInstance->errorFlag)	{
+    if(mInstance->errorFlag != ERR_CLEAR) {
 			if(!mInstance->errorHandler.handler)
 				reportError(mInstance,mInstance->lines[mInstance->curline].no);
 
@@ -991,10 +1003,22 @@ int basic(MINIBASIC *mInstance,const char *script,BYTE where) {
         }
       else	{
 //handle_error:
-        if(mInstance->errorHandler.handler)	{
-          nextline = mInstance->errorHandler.handler;
+        if(((int16_t)mInstance->errorHandler.handler)==-1)	{   // ON ERROR CONTINUE
+          mInstance->errorFlag=ERR_CLEAR;
+//      		nextstmt.d = STMT_CONTINUE;
+          // se no SALTA ALLA RIGA DOPO!! unire con ricerca COLON in line() come anche REM ELSE ecc
+      		nextstmt.line=mInstance->curline;
+          nextstmt.pos=mInstance->string-mInstance->lines[mInstance->curline].str;
+          }
+        else if(mInstance->errorHandler.handler)	{
+//          LINE_NUMBER_STMT_POS_TYPE oldnextstmt=nextstmt;
+          nextstmt=subGoto(mInstance,mInstance->errorHandler.handler);
+          if(nextstmt.line == -1)   // errore nell'errore :)
+            goto handle_error2;
           mInstance->errorHandler.errorcode=mInstance->errorFlag;
-          mInstance->errorHandler.errorline=mInstance->lines[mInstance->curline].no;
+          mInstance->errorFlag=ERR_CLEAR;
+          mInstance->errorHandler.line.line=mInstance->curline;
+          mInstance->errorHandler.line.pos=mInstance->string-mInstance->lines[mInstance->curline].str;
           }
         else	{
 handle_error2:
@@ -1003,45 +1027,83 @@ handle_error2:
           }
         }
       }
-		if(IFS0bits.INT0IF)	{     // boh attivare/usare se serve...
-			if(mInstance->irqHandler.handler) {
-        mInstance->irqHandler.errorline=mInstance->curline;   // uso come RETURN...
-        nextline = mInstance->irqHandler.handler;
-        }
-      IFS0bits.INT0IF=0;
-      }
-		if(IFS1bits.T7IF)	{
-			if(mInstance->timerHandler.handler) {
-        mInstance->timerHandler.errorline=mInstance->curline;   // uso come RETURN...
-        nextline = mInstance->timerHandler.handler;
-        }
-      IFS1bits.T7IF=0;
-      }
 
-		if(nextline == -1)			// p.es. comando END
+		if((int32_t)nextstmt.d == STMT_STOP)			// p.es. comando END
 	  	break;
 
-		if(nextline == 0)	{				//Line increment from 0 to 1
-    	mInstance->curline++;
+		if(nextstmt.d == STMT_CONTINUE)	{				//Line increment from 0 to 1
+  /*    
+ 	  if(mInstance->token == ELSE || mInstance->token==REM || mInstance->token==REM2) {
+			goto do_rem;
+			}
 
+	  if(mInstance->token != EOS) {
+			str = mInstance->string;
+			while(isspace(*str)) {
+			  if(*str == '\n' || *str == ':')
+			    break;
+			  str++;
+				}
+	
+			if(*str == ':') {   // questa roba potrebbe andare sopra nel loop principale... quando si restituisce 0... ?!
+				match(mInstance,COLON);
+				if(!mInstance->errorFlag)			// specie per STOP
+			  	goto rifo;
+				else
+					goto fine;
+				}
+			if(*str != '\n')
+			  setError(mInstance,ERR_SYNTAX);
+	  	}
+*/
+    	mInstance->curline++;
  			if(mInstance->curline == mInstance->nlines)			//check if last line has been read
    			break;
    		}
 		else {							//find next line
-    	mInstance->curline = findLine(mInstance,nextline);
- 			if(mInstance->curline == (int16_t)-1) {
-        char buf[32];
-        mInstance->ColorPaletteBK=textColors[0] /*BLACK*/;    // unire con reportError...
-        mInstance->ColorBK=ColorRGB(mInstance->ColorPaletteBK);
-        mInstance->ColorPalette=textColors[7] /*WHITE*/;
-        mInstance->Color=ColorRGB(mInstance->ColorPalette);
-        sprintf(buf,"line %u not found", nextline);		// QUESTO NON viene trappato.. non ha senso..!
-		    myTextOut(mInstance,buf);
-        myCR(mInstance);
-				goto handle_error2;
-  			}
+      if((int16_t)nextstmt.line != mInstance->curline) {
+        if((int16_t)nextstmt.line == -1) {
+          char buf[32];
+          mInstance->ColorPaletteBK=textColors[0] /*BLACK*/;    // unire con reportError...
+          mInstance->ColorBK=ColorRGB(mInstance->ColorPaletteBK);
+          mInstance->ColorPalette=textColors[7] /*WHITE*/;
+          mInstance->Color=ColorRGB(mInstance->ColorPalette);
+          // v. anche ERR_NOSUCHLINE 2022
+          sprintf(buf,"line %u not found", mInstance->lines[mInstance->curline].no);		// QUESTO NON viene trappato.. non ha senso..!
+//#warning RIMETTERE NUM RIGA GIUSTO, PER TUTTI
+          myTextOut(mInstance,buf);
+          myCR(mInstance);
+          goto handle_error2;
+          }
+        else
+          mInstance->curline = nextstmt.line;
+        }
    		}
+    mInstance->string = mInstance->lines[mInstance->curline].str + nextstmt.pos;
 		ClrWdt();
+    
+#ifndef USING_SIMULATOR
+		if(IFS0bits.INT0IF)	{     // boh attivare/usare se serve...
+      IFS0bits.INT0IF=0;
+			if(mInstance->irqHandler.handler && !mInstance->irqHandler.line.line) {   // evito rientro
+        nextstmt=subGoto(mInstance,mInstance->irqHandler.handler);
+        if(nextstmt.line == -1)   // errore 
+          goto handle_error2;
+        mInstance->irqHandler.line.line=mInstance->curline;
+        mInstance->irqHandler.line.pos=mInstance->string-mInstance->lines[mInstance->curline].str;
+        }
+      }
+#endif
+		if(IFS1bits.T7IF)	{
+      IFS1bits.T7IF=0;
+			if(mInstance->timerHandler.handler && !mInstance->timerHandler.line.line) {   // evito rientro
+        nextstmt=subGoto(mInstance,mInstance->timerHandler.handler);
+        if(nextstmt.line == -1)   // errore 
+          goto handle_error2;
+        mInstance->timerHandler.line.line=mInstance->curline;
+        mInstance->timerHandler.line.pos=mInstance->string-mInstance->lines[mInstance->curline].str;
+        }
+      }
     
     Yield(mInstance->threadID);
     
@@ -1051,16 +1113,17 @@ handle_error2:
 //      if(mInstance->incomingChar[0] =='c' && mInstance->incomingChar[1] == 0b00000001)
 #warning FINIRE modifier qua!
 //        break;
-      if(hitCtrlC(TRUE))    // opp. così...
+      if(hitCtrlC(TRUE)) {    // opp. così...
+        setError(mInstance,ERR_STOP);
         break;
-    
-      setError(mInstance,ERR_STOP);
+      }
       
 
     handle_events();
     mInstance->incomingChar[0]=keypress.key; mInstance->incomingChar[1]=keypress.modifier;
     KBClear();
 
+#ifndef USING_SIMULATOR
 #if defined(USA_USB_HOST) || defined(USA_USB_SLAVE_CDC)
     SYS_Tasks();
 #ifdef USA_USB_HOST_MSD
@@ -1076,6 +1139,7 @@ handle_error2:
 #ifdef USA_ETHERNET
     StackTask();
     StackApplications();
+#endif
 #endif
 
   	} //While finish
@@ -1100,6 +1164,7 @@ end_all:
 */
 int setup(MINIBASIC *mInstance,char *script) {
   int i;
+  char buf[64];
 
   mInstance->nlines = myStrCount(script,'\n');						//Count the lines in the Basic Script by counting \n
   mInstance->lines = (LINE *)malloc(mInstance->nlines * sizeof(LINE));
@@ -1112,6 +1177,10 @@ int setup(MINIBASIC *mInstance,char *script) {
 		if(isdigit(*script)) {
       mInstance->lines[i].str = script;
 	  	mInstance->lines[i].no = atoi(script);
+      if(!mInstance->lines[i].no) {
+        sprintf(buf,"line %d not allowed", mInstance->lines[i].no); //:)
+        goto errore;
+        }
 			}
 		else {
 	  	i--;
@@ -1122,20 +1191,19 @@ int setup(MINIBASIC *mInstance,char *script) {
 		script++;
   	}
   if(!mInstance->nlines) {
-    myTextOut(mInstance,"Can't read program");
-    myCR(mInstance);
-    free(mInstance->lines);
+    sprintf(buf,"Can't read program");
+    goto errore;
 		return -1;
   	}
 
   for(i=1; i<mInstance->nlines; i++) {
 		if(mInstance->lines[i].no <= mInstance->lines[i-1].no) {
-      char buf[32];
       sprintf(buf,"program lines %d and %d not in order", 
 	  		mInstance->lines[i-1].no, mInstance->lines[i].no);
+errore:
       myTextOut(mInstance,buf);
       myCR(mInstance);
-	  	free(mInstance->lines);
+	  	free(mInstance->lines); mInstance->lines=NULL;
 	  	return -1;
   		}
 		}
@@ -1207,7 +1275,7 @@ void cleanup(MINIBASIC *mInstance,uint8_t alsoprogram) {
 	if(alsoprogram) {
 	  if(mInstance->lines)
 			free(mInstance->lines);
-	  mInstance->lines = 0;
+	  mInstance->lines = NULL;
   	mInstance->nlines = 0;
 		}
 
@@ -1217,13 +1285,13 @@ void cleanup(MINIBASIC *mInstance,uint8_t alsoprogram) {
 	mInstance->inBlock=0;
 
 	mInstance->errorHandler.handler=0;
-	mInstance->errorHandler.errorline=0;
+	mInstance->errorHandler.line.d=0;
 	mInstance->errorHandler.errorcode=0;
 	mInstance->irqHandler.handler=0;
-	mInstance->irqHandler.errorline=0;
+	mInstance->irqHandler.line.d=0;
 	mInstance->irqHandler.errorcode=0;
 	mInstance->timerHandler.handler=0;
-	mInstance->timerHandler.errorline=0;
+	mInstance->timerHandler.line.d=0;
 	mInstance->timerHandler.errorcode=0;
 	}
 
@@ -1235,7 +1303,7 @@ void cleanup(MINIBASIC *mInstance,uint8_t alsoprogram) {
   writes to fperr.
   Params: lineno - the line on which the error occurred
 */
-void reportError(MINIBASIC *mInstance,LINE_NUMBER_TYPE lineno) {
+BSTATIC void reportError(MINIBASIC *mInstance, int16_t lineno) {
 
 // era un'idea :)  if(mInstance->Color==mInstance->ColorBK)
 //    mInstance->Color = ~mInstance->ColorBK;
@@ -1281,7 +1349,7 @@ acapo:
   Params: no - line number to find
   Returns: index of the line, or -1 on fail.
 */
-int16_t /*LINE_NUMBER_TYPE*/ findLine(MINIBASIC *mInstance,LINE_NUMBER_TYPE no) {    // signed per indicare fine...
+BSTATIC int16_t findLine(MINIBASIC *mInstance, LINE_NUMBER_TYPE no) {    // 
   int high;
   int low;
   int mid;
@@ -1308,7 +1376,7 @@ int16_t /*LINE_NUMBER_TYPE*/ findLine(MINIBASIC *mInstance,LINE_NUMBER_TYPE no) 
   return mid;
 	}
 
-BSTATIC int16_t findDef(MINIBASIC *mInstance,const char *id,char **pos) {
+BSTATIC int16_t findDef(MINIBASIC *mInstance,const char *id) {
   const char *p;
   int i;
   uint8_t t;
@@ -1321,7 +1389,6 @@ BSTATIC int16_t findDef(MINIBASIC *mInstance,const char *id,char **pos) {
       p += tokenLen(mInstance, p, mInstance->token);
       p=skipSpaces(p);
       if(!strnicmp(p,id,strlen(id))) {
-        *pos=(char*)p;
         return i;
         }
     	}
@@ -1333,16 +1400,13 @@ BSTATIC int16_t findDef(MINIBASIC *mInstance,const char *id,char **pos) {
 /*
   Parse a line. High level parse function
 */
-LINE_NUMBER_TYPE line(MINIBASIC *mInstance) {
-  LINE_NUMBER_TYPE answer;
+LINE_NUMBER_STMT_POS_TYPE line(MINIBASIC *mInstance) {
+  LINE_NUMBER_STMT_POS_TYPE answer;
   const char *str;
 
-//  match(mInstance,VALUE);   // spostato fuori, x gestire command-line
-
 rifo:
-	answer = 0;
+	answer.d = STMT_CONTINUE;
   switch(mInstance->token) {
-	
     case PRINT:
     case PRINT2:
 		  doPrint(mInstance);
@@ -1432,12 +1496,12 @@ rifo:
 		  break;
 		case IF:
 		  answer = doIf(mInstance);
-			if((int16_t)answer < 0)			// OCCHIO! unsigned 
+			if(answer.d == STMT_STOP)			// 
 				goto rifo;
 		  break;
 		case END:
       match(mInstance,END);
-		  answer = -1;
+		  answer.d = STMT_STOP;
 		  break;
 		case GOTO:
 		  answer = doGoto(mInstance);
@@ -1455,7 +1519,7 @@ rifo:
 		  answer = doOn(mInstance);
 		  break;
 		case RUN:
-			answer = doRun(mInstance);
+			answer.line = doRun(mInstance);
 			break;
 		case SHELL:
 			/*answer = */doShell(mInstance);
@@ -1468,19 +1532,22 @@ rifo:
 		  break;
 		case NEW:
       doNew(mInstance);
-		  answer = -1;    // per interrompere esecuzione :)
+		  answer.d = STMT_STOP;    // per interrompere esecuzione :)
+		  break;
+		case CLR:
+      doClr(mInstance);
 		  break;
 		case LOAD:
       doLoad(mInstance);
-		  answer = -1;    // per interrompere esecuzione :)
+		  answer.d = STMT_STOP;    //
 		  break;
 		case SAVE:
       doSave(mInstance);
-		  answer = -1;    // e boh..
+		  answer.d = STMT_STOP;    // e boh..
 		  break;
 		case QUIT:
 //      doQuit(mInstance);
-		  answer = -1;    // per interrompere esecuzione :)
+		  answer.d = STMT_STOP;    // per interrompere esecuzione :)
 		  break;
 
 		case INPUTTOK:
@@ -1496,8 +1563,11 @@ rifo:
 		case REM2:
 		case ELSE:			// defaults to here, i.e. when a IF statement is TRUE
 do_rem:
-		  doRem(mInstance);
-		  return 0;
+		  doRem(mInstance);     // REM va a fondo riga...
+//		  answer.d=STMT_CONTINUE;
+		  answer.line=mInstance->curline;   //..e imposto la riga che segue! (più che altro per On Timer ecc)
+		  answer.pos=0;
+      goto fine;
 		  break;
 		case FOR:
 		  answer = doFor(mInstance);
@@ -1571,15 +1641,14 @@ do_rem:
 #endif
       
 		default:
-//		  setError(mInstance,ERR_SYNTAX);
-      
       // if isdigit o mInstance->token==VALUE  per inserire righe...
       
 			doLet(mInstance,0);
 		  break;
 	  }
 
-	if(!answer) {
+	if(answer.d==STMT_CONTINUE) {  
+    // CREDO SIA INUTILE ORA, v. REM ELSE sopra!
 	  if(mInstance->token == ELSE || mInstance->token==REM || mInstance->token==REM2) {
 			goto do_rem;
 			}
@@ -1595,9 +1664,9 @@ do_rem:
 			  str++;
 				}
 	
-			if(*str == ':') {
+			if(*str == ':') {   // questa roba potrebbe andare sopra nel loop principale... quando si restituisce 0... ?!
 				match(mInstance,COLON);
-				if(!mInstance->errorFlag)			// specie per STOP
+        if(mInstance->errorFlag == ERR_CLEAR) 		// specie per STOP
 			  	goto rifo;
 				else
 					goto fine;
@@ -1670,6 +1739,7 @@ void doPrint(MINIBASIC *mInstance) {
 				}
 			}
     setError(mInstance,ERR_FILE);   // file not found/not valid
+    return;
   	}
 
 print_file_found:
@@ -1914,12 +1984,16 @@ print_file_found:
           }
         break;
       default:
+#ifndef USING_SIMULATOR
         putchar('\n');
+#endif
         mInstance->Cursor.y++; mInstance->Cursor.x=0;
         if(mInstance->Cursor.y >= ScreenText.cy) {
           mInstance->Cursor.y--;
           }
+#ifndef USING_SIMULATOR
         SetXYText(mInstance->Cursor.x,mInstance->Cursor.y);
+#endif
         break;
       }
 
@@ -1978,7 +2052,7 @@ void doLocate(MINIBASIC *mInstance) {
   if(y < 0 || y >= ScreenText.cy)
 		setError(mInstance, ERR_BADVALUE);
 
-  if(!mInstance->errorFlag) {   // qua evitiamo cazzate ;)
+  if(mInstance->errorFlag == ERR_CLEAR) {  // qua evitiamo cazzate ;)
     mInstance->Cursor.x=x;
     mInstance->Cursor.y=y;
     }
@@ -1988,11 +2062,11 @@ void doLocate(MINIBASIC *mInstance) {
 /*
   ------------------
 */
-LINE_NUMBER_TYPE doOn(MINIBASIC *mInstance) {
+LINE_NUMBER_STMT_POS_TYPE doOn(MINIBASIC *mInstance) {
   unsigned char n;
-  unsigned int i;
 	TOKEN_NUM t;
 	LINE_NUMBER_TYPE x;
+  LINE_NUMBER_STMT_POS_TYPE answer;
 
 	match(mInstance,ON);
 	t=getToken(mInstance->string);
@@ -2000,18 +2074,40 @@ LINE_NUMBER_TYPE doOn(MINIBASIC *mInstance) {
 	if(t==ERRORTOK) {
 		match(mInstance,ERRORTOK);
 		getToken(mInstance->string);
-		match(mInstance,GOTO);
-		mInstance->errorHandler.handler = integer(mInstance,expr(mInstance));
-		return 0;
+    // GESTIRE anche GOSUB qua?? con un flag negli handler per tornare? ma in effetti è già gestito così in doReturn
+    switch(mInstance->token) {
+      case GOTO:
+        match(mInstance,GOTO);
+        mInstance->errorHandler.handler = integer(mInstance,expr(mInstance));
+        break;
+      case CONTINUE:
+        match(mInstance,CONTINUE);
+        mInstance->errorHandler.handler = -1;
+        break;
+      case STOP:
+        match(mInstance,STOP);
+        mInstance->errorHandler.handler = 0;
+        break;
+      default:
+        setError(mInstance,ERR_SYNTAX);
+        break;
+      }
+		mInstance->errorHandler.errorcode = 0;
+		mInstance->errorHandler.line.d = 0;
+    answer.d=STMT_CONTINUE;
+		return answer;
 		}
 	else if(t==IRQ) {
 		match(mInstance,IRQ);
 		getToken(mInstance->string);
 		match(mInstance,GOTO);
 		mInstance->irqHandler.handler = integer(mInstance,expr(mInstance));
-		return 0;
+		mInstance->irqHandler.line.d = 0;
+    answer.d=STMT_CONTINUE;
+		return answer;
 		}
 	else if(t==TIMER) {
+    unsigned long long i;
 		match(mInstance,TIMER);
 		getToken(mInstance->string);
     if(mInstance->token == GOTO) {
@@ -2021,14 +2117,16 @@ LINE_NUMBER_TYPE doOn(MINIBASIC *mInstance) {
       i=integer(mInstance,expr(mInstance));
     if(i<1)
       i=1;
-    if(i>86400000UL)    // un giorno in millisecondi :)
-      i=86400000UL;
-    i=i*((GetPeripheralClock()/1000)/256);    // occhio overflow!
+    if(i>86400000ULL)    // un giorno in millisecondi :)
+      i=86400000ULL;
+    i=i*((GetPeripheralClock()/1000)/256);    // 
     PR6=LOWORD(i); PR7=HIWORD(i);
     TMR6=TMR7=0;
 		match(mInstance,GOTO);
 		mInstance->timerHandler.handler = integer(mInstance,expr(mInstance));
-		return 0;
+		mInstance->timerHandler.line.d = 0;
+    answer.d=STMT_CONTINUE;
+		return answer;
 		}
 	else {
 		n = integer(mInstance,expr(mInstance));
@@ -2037,27 +2135,30 @@ LINE_NUMBER_TYPE doOn(MINIBASIC *mInstance) {
 			match(mInstance,GOSUB);
 			if(mInstance->ngosubs >= MAXGOSUB) {
 				setError(mInstance,ERR_TOOMANYGOSUB);
-				return -1;
+        answer.d=STMT_STOP;
+        return answer;
 				}
 			}
 		else
 			match(mInstance,GOTO);
 
-	//FINIRE!
 		while(n--) {
 			x = integer(mInstance,expr(mInstance));
 			mInstance->string=(char *)skipSpaces(mInstance->string);
 			if(*mInstance->string != ',' /*COMMA*/)
 				break;
-			if(mInstance->errorFlag)
+      if(mInstance->errorFlag != ERR_CLEAR)
 				break;
 			}
+    while(*mInstance->string && *mInstance->string != ':' && *mInstance->string != '\n')  // vado a fine statement
+      mInstance->string++;
 
 		if(t==GOSUB) {
-		  mInstance->gosubStack[mInstance->ngosubs++] = getNextLine(mInstance->string);
+		  mInstance->gosubStack[mInstance->ngosubs++] = getNextStatement(mInstance,mInstance->string);
 			}
 
-		return x;
+    answer = subGoto(mInstance,x);
+   	return answer;
 		}
 
 	}
@@ -2090,15 +2191,14 @@ void doOpen(MINIBASIC *mInstance) {		// OPEN filename [FOR mode][ACCESS access][
       // ev. APPEND ecc
   		setError(mInstance,ERR_SYNTAX);
       goto open_error;
-    }
+      }
     
     match(mInstance,mInstance->token);
 
 //		}
   match(mInstance,AS);
 	fileno = integer(mInstance,expr(mInstance));
-  
-  if(fileno<1) {
+  if(fileno<1 || fileno>253 /*mah sì*/) {
  		setError(mInstance,ERR_BADVALUE);
     goto open_error;
     }
@@ -2172,6 +2272,8 @@ UDP:      */
 //  setError(mInstance,ERR_NETWORK);
           }
         }
+      else
+        goto open_error;
       mInstance->nfiles++;
 			}
 		else if(!strnicmp(str,"UDP:",4)) {
@@ -2214,6 +2316,8 @@ UDP:      */
 //  setError(mInstance,ERR_NETWORK);
           }
         }
+      else
+        goto open_error;
       mInstance->nfiles++;
 			}
 #endif
@@ -2244,15 +2348,15 @@ is_disk:
         mInstance->nfiles++;
         }
       else {
-    		mInstance->openFiles[mInstance->nfiles--].number=0;
-    		setError(mInstance,ERR_FILE);
+        free(f);
+        goto open_error;
         }
 			}
-open_error:
 		free(str);
 		}
 	else {
-      
+open_error:
+		free(str);
 		setError(mInstance,ERR_FILE);
 		}
 	}
@@ -2822,7 +2926,7 @@ void doPower(MINIBASIC *mInstance) {
 /*
   the RUN statement
 */
-LINE_NUMBER_TYPE doRun(MINIBASIC *mInstance) {
+int16_t doRun(MINIBASIC *mInstance) {
   int t=0;
 
   match(mInstance,RUN);
@@ -2835,9 +2939,13 @@ LINE_NUMBER_TYPE doRun(MINIBASIC *mInstance) {
 	else
 		mInstance->curline=0;
   
-  mInstance->string = mInstance->lines[mInstance->curline].str;
-  mInstance->token = getToken(mInstance->string);
-  mInstance->errorFlag = 0;
+  if(mInstance->curline>=0) {
+    mInstance->string = mInstance->lines[mInstance->curline].str;
+    mInstance->token = getToken(mInstance->string);
+    mInstance->errorFlag = ERR_CLEAR;
+    }
+  else
+    setError(mInstance,ERR_NOSUCHLINE);   // (sopra è gestita a parte)
 
 #warning RUN non va... bisogna passare da commandline a basic() ...
 	return mInstance->curline;
@@ -2860,7 +2968,7 @@ void doShell(MINIBASIC *mInstance) {
 void doContinue(MINIBASIC *mInstance) {
 
   match(mInstance,CONTINUE);
-	mInstance->errorFlag=0;
+	mInstance->errorFlag=ERR_CLEAR;
 	}
 
 void doList(MINIBASIC *mInstance) {
@@ -2895,6 +3003,12 @@ void doNew(MINIBASIC *mInstance) {
   match(mInstance,NEW);
 	*theScript=0;
   cleanup(mInstance,1);   // verificare, se si usa!
+	}
+
+void doClr(MINIBASIC *mInstance) {
+  
+  match(mInstance,CLR);
+  cleanup(mInstance,0);
 	}
 
 int subLoad(const char *s,char *p) {
@@ -3348,9 +3462,18 @@ void doTone(MINIBASIC *mInstance) {
 void doBeep(MINIBASIC *mInstance) {
   WORD durata;
   
+  
+  
+//    IFS1bits.T7IF=1; //test
+
+    
+    
+    
   match(mInstance,BEEP);
   durata = expr(mInstance);
   // usare StdBeep(durata) ??
+  if(!durata)   // o dare errore... v sopra
+    durata=500;
   OC1CONbits.ON=1;    //
   __delay_ms(durata); 
   OC1CONbits.ON=0;
@@ -3495,7 +3618,7 @@ is_var:
           lvalue(mInstance,&lv);
           if(lv.type != STRID)
             setError(mInstance,ERR_TYPEMISMATCH);
-          if(mInstance->errorFlag)
+          if(mInstance->errorFlag != ERR_CLEAR)
             break;
 
           match(mInstance,COMMA);
@@ -3692,7 +3815,7 @@ void doDim(MINIBASIC *mInstance) {
 				while(mInstance->token == COMMA && i < size)	{
 					match(mInstance,COMMA);
 					dimvar->d.dval[i++] = expr(mInstance);
-					if(mInstance->errorFlag)
+          if(mInstance->errorFlag != ERR_CLEAR)
 						break;
 					}
 				break;
@@ -3707,7 +3830,7 @@ void doDim(MINIBASIC *mInstance) {
 					if(dimvar->d.str[i])
 						free(dimvar->d.str[i]);
 					dimvar->d.str[i++] = stringExpr(mInstance);
-					if(mInstance->errorFlag)
+          if(mInstance->errorFlag != ERR_CLEAR)
 						break;
 					}
 				break;
@@ -3717,7 +3840,7 @@ void doDim(MINIBASIC *mInstance) {
 				while(mInstance->token == COMMA && i < size)	{
 					match(mInstance,COMMA);
 					dimvar->d.ival[i++] = integer(mInstance,expr(mInstance));
-					if(mInstance->errorFlag)
+          if(mInstance->errorFlag != ERR_CLEAR)
 						break;
 					}
 				break;
@@ -3753,42 +3876,60 @@ void doDim(MINIBASIC *mInstance) {
 
 /*
   the IF statement.
-  if jump taken, returns new line no, else returns 0
+  [if jump taken, returns new line no, else returns 0]
 */
-LINE_NUMBER_TYPE doIf(MINIBASIC *mInstance) {
+LINE_NUMBER_STMT_POS_TYPE doIf(MINIBASIC *mInstance) {
   char condition;
-  LINE_NUMBER_TYPE jumpthen,jumpelse=0;
+  LINE_NUMBER_STMT_POS_TYPE jumpthen,jumpelse;
+  
+  jumpelse.d=STMT_CONTINUE;
 
   match(mInstance,IF);
   condition = boolExpr(mInstance);
   match(mInstance,THEN);
   if(mInstance->token==VALUE) {   // GD 2022
-    jumpthen = integer(mInstance,expr(mInstance));
+    jumpthen.line=findLine(mInstance,integer(mInstance,expr(mInstance)));
+    jumpthen.pos=0;
+    if(jumpthen.line == -1) {
+      setError(mInstance,ERR_NOSUCHLINE);   // (sopra è gestita a parte)
+      }
     if(mInstance->token == ELSE) {
       match(mInstance,ELSE);
-      jumpelse = integer(mInstance,expr(mInstance));
+      jumpelse.line=findLine(mInstance,integer(mInstance,expr(mInstance)));
+      jumpelse.pos=0;
+      if(jumpelse.line == -1) {
+        setError(mInstance,ERR_NOSUCHLINE);   // (sopra è gestita a parte)
+        }
       }
     return condition ? jumpthen : jumpelse;
     }
   else {
-    if(condition)
-      return -1;    // dovrebbe forzare esecuzione stmt successivo, v. sopra
-    else {      // cerco EOL o ELSE (e servirebbe gestire : ...)
+    if(condition) {
+      jumpthen.d=STMT_STOP;
+      return jumpthen;    // forza esecuzione stmt successivo, v. sopra
+      }
+    else {      // cerco EOL o ELSE, gestisco COLON 
       for(;;) {
         mInstance->token = getToken(mInstance->string);
 //	      getId(mInstance,mInstance->string, nextid, &len);
         switch(mInstance->token) {
           case EOS:
 //            match(mInstance,EOS);
-            return 0;
+            jumpthen.d=STMT_CONTINUE;
+            return jumpthen;
             break;
           case EOL:
 //            match(mInstance,EOL);
-            return 0;
+            jumpthen.d=STMT_CONTINUE;
+            return jumpthen;
+            break;
+          case COLON:
+            match(mInstance,COLON);
             break;
           case ELSE:
             match(mInstance,ELSE);
-            return -1;
+            jumpthen.d=STMT_STOP;
+            return jumpthen;
             break;
           default:
             match(mInstance,mInstance->token);
@@ -3805,23 +3946,35 @@ LINE_NUMBER_TYPE doIf(MINIBASIC *mInstance) {
   the GOTO statement
   returns new line number
 */
-LINE_NUMBER_TYPE doGoto(MINIBASIC *mInstance) {
+LINE_NUMBER_STMT_POS_TYPE subGoto(MINIBASIC *mInstance,uint16_t line) {
+  LINE_NUMBER_STMT_POS_TYPE toline;
+
+  toline.line = findLine(mInstance,line);
+  if(toline.line == -1)
+    setError(mInstance,ERR_NOSUCHLINE);   // (sopra è gestita a parte)
+  toline.pos=0;
+  return toline;
+	}
+LINE_NUMBER_STMT_POS_TYPE doGoto(MINIBASIC *mInstance) {
+  LINE_NUMBER_STMT_POS_TYPE toline;
 
   match(mInstance,GOTO);
-  return integer(mInstance,expr(mInstance));
+  return subGoto(mInstance,integer(mInstance,expr(mInstance)));
 	}
 
-LINE_NUMBER_TYPE doGosub(MINIBASIC *mInstance) {
-  LINE_NUMBER_TYPE toline;
+LINE_NUMBER_STMT_POS_TYPE doGosub(MINIBASIC *mInstance) {
+  LINE_NUMBER_STMT_POS_TYPE toline;
+  int16_t i;
 
   match(mInstance,GOSUB);
-  toline = integer(mInstance, expr(mInstance));
   if(mInstance->ngosubs >= MAXGOSUB) {
 	  setError(mInstance,ERR_TOOMANYGOSUB);
-	  return -1;
+	  toline.d=STMT_STOP;
+    return toline;
 		}
-  mInstance->gosubStack[mInstance->ngosubs++] = getNextLine(mInstance->string);
-  return toline;
+  i=integer(mInstance,expr(mInstance));
+  mInstance->gosubStack[mInstance->ngosubs++] = getNextStatement(mInstance,mInstance->string);
+  return subGoto(mInstance,i);
 	}
 
 void doError(MINIBASIC *mInstance) {
@@ -3830,33 +3983,35 @@ void doError(MINIBASIC *mInstance) {
   setError(mInstance,integer(mInstance, expr(mInstance)));
 	}
 
-LINE_NUMBER_TYPE doReturn(MINIBASIC *mInstance) {
-  int n;
+LINE_NUMBER_STMT_POS_TYPE doReturn(MINIBASIC *mInstance) {
+  LINE_NUMBER_STMT_POS_TYPE n;
 
   match(mInstance,RETURN);
   
-  // COME scegliere quello valido??
-  if(mInstance->errorHandler.errorline) {
-    n=mInstance->lines[mInstance->errorHandler.errorline].no;
-    mInstance->errorHandler.errorline=0;
+  // COME scegliere quello valido?? diciam che ci basiamo sulla line salvata
+  if(mInstance->errorHandler.line.d) {
+    n=mInstance->errorHandler.line;
+    mInstance->errorHandler.line.d=0;
+    mInstance->errorHandler.errorcode=0;
     return n;
     }
-  if(mInstance->irqHandler.errorline) {
-    n=mInstance->lines[mInstance->irqHandler.errorline].no;
-    mInstance->irqHandler.errorline=0;
+  if(mInstance->irqHandler.line.d) {
+    n=mInstance->irqHandler.line;
+    mInstance->irqHandler.line.d=0;
     return n;
     }
-  if(mInstance->timerHandler.errorline) {
-    n=mInstance->lines[mInstance->timerHandler.errorline].no;
-    mInstance->timerHandler.errorline=0;
+  if(mInstance->timerHandler.line.d) {
+    n=mInstance->timerHandler.line;
+    mInstance->timerHandler.line.d=0;
     return n;
     }
 
   if(mInstance->ngosubs <= 0) {
 	  setError(mInstance,ERR_NORETURN);
-	  return -1;
+    n.d=STMT_STOP;
+	  return n;
 		}
-#warning lo statement : dopo GOSUB non funziona... 2022 (è perché ragiona solo in termini di Righe e non di statement..)
+  
   return mInstance->gosubStack[--mInstance->ngosubs];
 	}
 
@@ -3867,15 +4022,14 @@ LINE_NUMBER_TYPE doReturn(MINIBASIC *mInstance) {
   Pushes the for stack.
   Returns line to jump to, or -1 to end program
 */
-LINE_NUMBER_TYPE doFor(MINIBASIC *mInstance) {
+LINE_NUMBER_STMT_POS_TYPE doFor(MINIBASIC *mInstance) {
   LVALUE lv;
   char id[IDLENGTH];
   IDENT_LEN len;
   NUM_TYPE initval;
   NUM_TYPE toval;
   NUM_TYPE stepval;
-  const char *savestring;
-  int answer;
+  LINE_NUMBER_STMT_POS_TYPE answer;
 
   match(mInstance,FOR);
   getId(mInstance,mInstance->string, id, &len);
@@ -3883,7 +4037,8 @@ LINE_NUMBER_TYPE doFor(MINIBASIC *mInstance) {
   lvalue(mInstance,&lv);
   if(lv.type != FLTID && lv.type != INTID) {
     setError(mInstance,ERR_TYPEMISMATCH);
-		return -1;
+    answer.d=STMT_STOP;
+		return answer;
 		}
   match(mInstance,EQUALS);
   initval = expr(mInstance);
@@ -3896,51 +4051,82 @@ LINE_NUMBER_TYPE doFor(MINIBASIC *mInstance) {
   else
     stepval = 1.0;
 
-  if(lv.type == INTID) {
+  if(lv.type == INTID)
 	  *lv.d.ival = initval;
-		}
+
 	else
 	  *lv.d.dval = initval;
 
   if(mInstance->nfors > MAXFORS - 1) {
 		setError(mInstance,ERR_TOOMANYFORS);
-		return -1;
+    answer.d=STMT_STOP;
+		return answer;
 	  }
-#warning lo statement : dopo FOR non funziona... 2021 (è perché ragiona solo in termini di Righe e non di statement..)
-  
+ 
   if(((stepval < 0) && (initval <= toval)) || ((stepval > 0) && (initval >= toval))) {
-    // questa roba serve a skippare completamente un FOR se le condizioni sono invalide... ragiona solo con le righe quindi dovrebbe gestire il : ...
+    // questa roba serve a skippare completamente un FOR se le condizioni sono invalide... 
+    //ragiona solo con le righe quindi dovrebbe gestire il : ...
 	  char nextid[IDLENGTH];
+    const char *savestring;
 		savestring = mInstance->string;
-    while(mInstance->string = strchr((char *)mInstance->string, '\n'))	{
-      mInstance->errorFlag = 0;
-		  mInstance->token = getToken(mInstance->string);
-		  match(mInstance,EOL);
-		  match(mInstance,VALUE);
-		  if(mInstance->token == NEXT) {
-		    match(mInstance,NEXT);
-				if(mInstance->token == FLTID || mInstance->token == DIMFLTID) {
-		      getId(mInstance,mInstance->string, nextid, &len);
-				  if(!stricmp(id, nextid)) {    // case insens GD 2022
-						answer = getNextLine(mInstance->string);
-						mInstance->string = savestring;
-						mInstance->token = getToken(mInstance->string);
-						return answer ? answer : -1;
-				  	}
-					}
-		  	}
-			}
-
+//      mInstance->errorFlag = ERR_CLEAR;
+    for(;;) {
+      mInstance->token = getToken(mInstance->string);
+//	      getId(mInstance,mInstance->string, nextid, &len);
+      switch(mInstance->token) {
+        case EOL:
+          mInstance->curline++;
+        case EOS:
+        case COLON:
+        case VALUE:
+          match(mInstance,mInstance->token);
+          break;
+        case NEXT:
+          match(mInstance,NEXT);
+          if(mInstance->token == FLTID || mInstance->token == DIMFLTID ||
+            mInstance->token == INTID || mInstance->token == DIMINTID) {
+            getId(mInstance,mInstance->string, nextid, &len);
+            if(!stricmp(id, nextid)) {    // case insens GD 2022
+              match(mInstance,mInstance->token);
+//              if(mInstance->token == EOL || mInstance->token == EOS || mInstance->token == COLON)
+//                match(mInstance,mInstance->token);
+              answer = getNextStatement(mInstance,mInstance->string);
+//              mInstance->string = savestring;
+//              mInstance->token = getToken(mInstance->string);
+              if(!answer.d)
+                answer.d=STMT_STOP;
+              return answer;
+              }
+            }
+          else {
+//            if(mInstance->token == EOL || mInstance->token == EOS || mInstance->token == COLON)
+//              match(mInstance,mInstance->token);
+            answer = getNextStatement(mInstance,mInstance->string);
+//            mInstance->string = savestring;
+//            mInstance->token = getToken(mInstance->string);
+            if(!answer.d)
+              answer.d=STMT_STOP;
+            return answer;
+            }
+          break;
+        default:    // incluso ' che viene scartato anche senza : , ok
+          match(mInstance,mInstance->token);
+          break;
+        }
+      }
+	
 		setError(mInstance,ERR_NONEXT);
-		return -1;
+    answer.d=STMT_STOP;
+		return answer;
   	}
   else {
 		strcpy(mInstance->forStack[mInstance->nfors].id, id);
-		mInstance->forStack[mInstance->nfors].nextline = getNextLine(mInstance->string);
-		mInstance->forStack[mInstance->nfors].step = stepval;
+		mInstance->forStack[mInstance->nfors].nextline = getNextStatement(mInstance,mInstance->string);
 		mInstance->forStack[mInstance->nfors].toval = toval;
+		mInstance->forStack[mInstance->nfors].step = stepval;
 		mInstance->nfors++;
-    return 0;
+    answer.d=STMT_CONTINUE;
+		return answer;
 	  }
 
 	}
@@ -3951,17 +4137,18 @@ LINE_NUMBER_TYPE doFor(MINIBASIC *mInstance) {
   the NEXT statement
   updates the counting index, and returns line to jump to
 */
-LINE_NUMBER_TYPE doNext(MINIBASIC *mInstance) {
+LINE_NUMBER_STMT_POS_TYPE doNext(MINIBASIC *mInstance) {
   char id[IDLENGTH];
   IDENT_LEN len;
   LVALUE lv;
 	BYTE n;
+  LINE_NUMBER_STMT_POS_TYPE answer;
 
   match(mInstance,NEXT);
 
   if(mInstance->nfors>0) {
 		n=mInstance->nfors-1;
-		if(mInstance->token == EOL) {
+		if(mInstance->token == EOL || mInstance->token == COLON) {
 			VARIABLE *var;
 			var = findVariable(mInstance,mInstance->forStack[n].id);
 /*			if(!var) {		// IMPOSSIBILE!
@@ -3975,20 +4162,23 @@ LINE_NUMBER_TYPE doNext(MINIBASIC *mInstance) {
 	    getId(mInstance,mInstance->string, id, &len);
 			if(stricmp(id,mInstance->forStack[n].id)) {   // case GD 2022
 		    setError(mInstance,ERR_NOFOR);
-				return 0;
+        answer.d=STMT_CONTINUE;
+        return answer;
 				}
 	    lvalue(mInstance,&lv);
 			}
   	if(lv.type != FLTID && lv.type != INTID) {
 		  setError(mInstance,ERR_TYPEMISMATCH);
-	  	return -1;
+      answer.d=STMT_STOP;
+    	return answer;
 			}
 	  if(lv.type == FLTID) {
 	    *lv.d.dval += mInstance->forStack[n].step;
 			if( (mInstance->forStack[n].step < 0 && *lv.d.dval < mInstance->forStack[n].toval) ||
 				(mInstance->forStack[n].step > 0 && *lv.d.dval > mInstance->forStack[n].toval)) {
 			  mInstance->nfors--;
-			  return 0;
+        answer.d=STMT_CONTINUE;
+        return answer;
 				}
 			else {
 	      return mInstance->forStack[n].nextline;
@@ -3999,7 +4189,8 @@ LINE_NUMBER_TYPE doNext(MINIBASIC *mInstance) {
 			if( (mInstance->forStack[n].step < 0 && *lv.d.ival < mInstance->forStack[n].toval) ||
 				(mInstance->forStack[n].step > 0 && *lv.d.ival > mInstance->forStack[n].toval)) {
 			  mInstance->nfors--;
-			  return 0;
+        answer.d=STMT_CONTINUE;
+        return answer;
 				}
 			else {
 	      return mInstance->forStack[n].nextline;
@@ -4008,7 +4199,8 @@ LINE_NUMBER_TYPE doNext(MINIBASIC *mInstance) {
   	}
   else {
     setError(mInstance,ERR_NOFOR);
-		return -1;
+    answer.d=STMT_STOP;
+    return answer;
   	}
 	}
 
@@ -4019,7 +4211,8 @@ LINE_NUMBER_TYPE doNext(MINIBASIC *mInstance) {
   Pushes the do stack.
   Returns line to jump to, or -1 to end program
 */
-LINE_NUMBER_TYPE doDo(MINIBASIC *mInstance) {
+LINE_NUMBER_STMT_POS_TYPE doDo(MINIBASIC *mInstance) {
+  LINE_NUMBER_STMT_POS_TYPE answer;
   int t;
 
   match(mInstance,DO);
@@ -4027,22 +4220,26 @@ LINE_NUMBER_TYPE doDo(MINIBASIC *mInstance) {
 	  match(mInstance,WHILE);
 		t = boolExpr(mInstance);
 		}
+  // QUESTE NON VANNO!! finire
   else if(mInstance->token == UNTIL) {
 	  match(mInstance,UNTIL);
 		t = !boolExpr(mInstance);
 		}
+  
 	else {
     t=1;
 		}
 
-  if(mInstance->ndos > MAXFORS - 1) {
+  if(mInstance->ndos > MAXFORS-1) {
 		setError(mInstance,ERR_TOOMANYFORS);
-		return -1;
+    answer.d=STMT_STOP;
+		return answer;
 	  }
   else {
 		if(t) {
-			mInstance->doStack[mInstance->ndos++] = mInstance->lines[mInstance->curline].no /*getNextLine(string)*/;
-			return 0;
+			mInstance->doStack[mInstance->ndos++] = getNextStatement(mInstance,mInstance->string);
+      answer.d=STMT_CONTINUE;
+    	return answer;
 			}
 		else {
 			uint8_t n;
@@ -4052,17 +4249,26 @@ LINE_NUMBER_TYPE doDo(MINIBASIC *mInstance) {
 				mInstance->curline++;
 				mInstance->string = mInstance->lines[mInstance->curline].str;
 				mInstance->token = getToken(mInstance->string);
-				if(mInstance->token==DO)
-					n++;
-				if(mInstance->token==LOOP)
-					n--;
+				switch(mInstance->token) {
+          case DO:
+            n++;
+            break;
+          case LOOP:
+            n--;
+            break;
 				// use inBlocks...
-				if(mInstance->token==EOS) {
-				  setError(mInstance,ERR_SYNTAX /* or NEXT / LOOP not found... */);
-					break;;
+          case COLON:
+            break;
+          case EOS:
+            setError(mInstance,ERR_SYNTAX /* or NEXT / LOOP not found... */);
+            break;
+          default:
+            break;
 					}
 				} while(mInstance->token != LOOP && n==0);
-			return mInstance->lines[mInstance->curline+1].no;
+			answer.line = mInstance->curline;
+      answer.pos = mInstance->string - mInstance->lines[mInstance->curline].str;
+    	return answer;
 			}
 	  }
 
@@ -4075,9 +4281,9 @@ LINE_NUMBER_TYPE doDo(MINIBASIC *mInstance) {
 
   Uses the do stack.
   Returns line to jump to, or -1 to end program
-
 */
-LINE_NUMBER_TYPE doLoop(MINIBASIC *mInstance) {
+LINE_NUMBER_STMT_POS_TYPE doLoop(MINIBASIC *mInstance) {
+  LINE_NUMBER_STMT_POS_TYPE answer;
   int t;
 
   match(mInstance,LOOP);
@@ -4094,13 +4300,19 @@ LINE_NUMBER_TYPE doLoop(MINIBASIC *mInstance) {
 		}
 
 	if(mInstance->ndos>0) {
-    --mInstance->ndos;
-    return t ? mInstance->doStack[mInstance->ndos] : 0;
+    if(t) {
+      answer=mInstance->doStack[mInstance->ndos-1];
+      }
+    else {
+      --mInstance->ndos;
+      answer.d=STMT_CONTINUE;
+      }
 		}
   else {
     setError(mInstance,ERR_NOFOR);
-		return -1;
+    answer.d=STMT_STOP;
   	}
+  return answer;
 	}
 
 
@@ -4110,16 +4322,17 @@ LINE_NUMBER_TYPE doLoop(MINIBASIC *mInstance) {
 void doInput(MINIBASIC *mInstance) {
   LVALUE lv;
   char buff[256];
-  char *end;
+  char *end,*newbuff;
   enum _FILE_TYPES filetype=-1;
 	void *ftemp=NULL;
+  int i;
 
   match(mInstance,INPUTTOK);
-  lvalue(mInstance,&lv);
+  *buff=0;
 
   mInstance->string=(char *)skipSpaces(mInstance->string);
 //	t=getToken(string); USARE?
-  if(*mInstance->string == '#')	{	// per print to file
+  if(*mInstance->string == '#')	{	// per input from file
 		unsigned int f,i;
     
 		match(mInstance,DIESIS);
@@ -4155,17 +4368,18 @@ void doInput(MINIBASIC *mInstance) {
 				}
 			}
     setError(mInstance,ERR_FILE);   // file not found/not valid
+    return;
 		}
 
 input_file_found:
-  //v. anche inputString ecc..
   
   switch(filetype) {
     case FILE_COM:
     {
-//      char *p=str;
-//      while(*p) finire....
-//        *p++=ReadSerial();
+      char *p=buff;
+      while(*p && *p != '\n')   // finire....
+        *p++=ReadSerial();
+      *p=0;
     }
       break;
 #ifdef USA_USB_SLAVE_CDC
@@ -4184,60 +4398,88 @@ input_file_found:
       break;
 #endif
     case FILE_DISK:
-//      if(!SuperFileGets(ftemp,str,127)) {     // 
-//        setError(mInstance,ERR_FILE);
-//        }
+      if(!SuperFileGets(ftemp,buff,254)) {     // 
+        setError(mInstance,ERR_FILE);
+        }
+      else {
+        }
       break;
     default:
       SetCursorMode(1,1);     // fare solo se input NON da file...
+//      if(gets(buff) == 0)	{
+  		if(mInstance->token == QUOTE) {
+        inputString(buff,254,stringExpr(mInstance),0);
+      	match(mInstance,COMMA);
+        }
+      else
+        inputString(buff,254,"?",0);
+      if(i == 0) {
+//				setError(mInstance,ERR_EOF);
+//        return;
+        }
+      myCR(mInstance);
       break;
     }
-  
 
-  switch(lv.type) {
-		case FLTID:
-			while(scanf((char *)"%lf", lv.d.dval) != 1) {
-// FINIRE!
-				mInstance->incomingChar[0];
-        //getchar();
-				}
-			break;
-		case INTID:
-    {
-      int n;
-			while(scanf((char *)"%d", &n) != 1) {
-        *lv.d.ival=n;
-        mInstance->incomingChar[0];
-      //getchar();
-				}
-    }
-			break;
-		case STRID:
-			if(*lv.d.sval) {
-				free(*lv.d.sval);
-				*lv.d.sval = 0;
-				}
-			if(gets(buff) == 0)	{
+  if(!*buff) {
 //				setError(mInstance,ERR_EOF);
-				return;
-				}
-			end = strchr(buff, '\n');
-			if(!end) {
-				setError(mInstance,ERR_INPUTTOOLONG);
-//				return;
-				}
-			*end = 0;
-			*lv.d.sval = strdup(buff);
-			if(!*lv.d.sval)	{
-				setError(mInstance,ERR_OUTOFMEMORY);
-//				return;
-				}
-			break;
-		default:
-			break;
-		}
+//    goto fine_input;
+    }
+  end=strchr(buff, '\n');
+  if(!end) {
+//    setError(mInstance,ERR_INPUTTOOLONG);
+// sì?        goto fine_input;
+    }
+  else *end=0;
   
-  
+  lvalue(mInstance,&lv);
+	newbuff=strtok(buff,",");
+  while(newbuff) {
+    switch(lv.type) {
+      // dare errore se non-numero??
+      case FLTID:
+        if(sscanf(newbuff,(char *)"%f", lv.d.dval) == 1) {
+          }
+				// se no, uscire?
+				else
+					goto fine_input;
+        break;
+      case INTID:
+      {
+        int n;
+        if(sscanf(newbuff,(char *)"%d", &n) == 1) {
+          *lv.d.ival=n;
+          }
+				// se no, uscire?
+				else
+					goto fine_input;
+      }
+        break;
+      case STRID:
+        if(*lv.d.sval) {
+          free(*lv.d.sval);
+          *lv.d.sval = 0;
+          }
+        *lv.d.sval = strdup(newbuff);
+        if(!*lv.d.sval)	{
+          setError(mInstance,ERR_OUTOFMEMORY);
+  //				return;
+          }
+        break;
+      default:
+        goto fine_input;
+        break;
+      }
+		if(mInstance->token != COMMA) {
+      break;
+      }
+  	match(mInstance,COMMA);
+		newbuff=strtok(NULL,",");
+    lvalue(mInstance,&lv);
+    // non è perfetto perchè se ci sono meno valori (con ,) che lista di variabili va in SYNTAX ERROR...
+    }
+
+fine_input:
   SetCursorMode(0,0);   // fare solo se in RUN!
 
 	}
@@ -4303,6 +4545,7 @@ void doGet(MINIBASIC *mInstance) {
     }
   
   setError(mInstance,ERR_FILE);
+  return;
 
 get_file_found:
   switch(filetype) {
@@ -4405,7 +4648,8 @@ void doPut(MINIBASIC *mInstance) {
     }
 
   setError(mInstance,ERR_FILE);
-
+  return;
+  
 put_file_found:
 
   switch(filetype) {
@@ -4454,7 +4698,12 @@ void doRem(MINIBASIC *mInstance) {
 
 //  match(mInstance,REM);
   
-  match(mInstance,mInstance->token);		// e REM2 ??
+  match(mInstance,mInstance->token);		//
+  while(*mInstance->string && *mInstance->string != '\n')
+    mInstance->string++;
+  if(*mInstance->string == '\n')
+    mInstance->string++;
+  mInstance->curline++;
 	}
 
 
@@ -5153,14 +5402,14 @@ void lvalue(MINIBASIC *mInstance,LVALUE *lv) {
 				switch(dimvar->ndims)	{
 					case 1:
 						index[0] = integer(mInstance,expr(mInstance));
-						if(!mInstance->errorFlag)
+            if(mInstance->errorFlag == ERR_CLEAR)
               valptr = getDimVar(mInstance,dimvar, index[0]);
 						break;
 					case 2:
 						index[0] = integer(mInstance,expr(mInstance));
 						match(mInstance,COMMA);
 						index[1] = integer(mInstance,expr(mInstance));
-						if(!mInstance->errorFlag)
+            if(mInstance->errorFlag == ERR_CLEAR)
 							valptr = getDimVar(mInstance,dimvar, index[0], index[1]);
 						break;
 					case 3:
@@ -5169,7 +5418,7 @@ void lvalue(MINIBASIC *mInstance,LVALUE *lv) {
 						index[1] = integer(mInstance,expr(mInstance));
 						match(mInstance,COMMA);
 						index[2] = integer(mInstance,expr(mInstance));
-						if(!mInstance->errorFlag)
+            if(mInstance->errorFlag == ERR_CLEAR)
 							valptr = getDimVar(mInstance,dimvar, index[0], index[1], index[2]);
 						break;
 				  case 4:
@@ -5180,7 +5429,7 @@ void lvalue(MINIBASIC *mInstance,LVALUE *lv) {
             index[2] = integer(mInstance,expr(mInstance));
 						match(mInstance,COMMA);
 						index[3] = integer(mInstance,expr(mInstance));
-						if(!mInstance->errorFlag)
+            if(mInstance->errorFlag == ERR_CLEAR)
 							valptr = getDimVar(mInstance,dimvar, index[0], index[1], index[2], index[3]);
 						break;
 					case 5:
@@ -5193,27 +5442,26 @@ void lvalue(MINIBASIC *mInstance,LVALUE *lv) {
 						index[3] = integer(mInstance,expr(mInstance));
 						match(mInstance,COMMA);
 						index[4] = integer(mInstance,expr(mInstance));
-						if(!mInstance->errorFlag)
+            if(mInstance->errorFlag == ERR_CLEAR)
 							valptr = getDimVar(mInstance,dimvar, index[0], index[1], index[2], index[3]);
 						break;
 					}
 				match(mInstance,CPAREN);
 				}
 			else {
-        LINE_NUMBER_TYPE defLine,oldLine;
+        int16_t defLine;
         const char *oldPos;
         char *p;
         char buf[256];
-        defLine=findDef(mInstance,name,&p);
-        if(((int16_t)defLine) != -1) {
+        defLine=findDef(mInstance,name);
+        if(defLine != -1) {
           // CHIAMARE FUNZIONE DEF FN!
-          oldLine=mInstance->curline;
           oldPos=mInstance->string;
-          // substDefParm(mInstance,mInstance->string,p,buf)
-          mInstance->curline=defLine;   // serve davvero?
+          // substDefParm(mInstance,mInstance->string,p,buf) FARE!
+//          mInstance->curline=defLine;   // serve davvero?
           mInstance->string=buf;
           expr(mInstance);
-          mInstance->curline=oldLine;   // serve davvero?
+//          mInstance->curline=oldLine;   // serve davvero?
           mInstance->string=oldPos;
           }
         else {
@@ -5531,7 +5779,7 @@ NUM_TYPE expr(MINIBASIC *mInstance) {
 				op=relOp(mInstance);			//Find relationship operator  eg = > < >= <=
 				if(op != B_ERROR) {		//If operator found OK
 //          if(mInstance->errorFlag==ERR_SYNTAX || mInstance->errorFlag==ERR_NOSUCHVARIABLE)    // bah..
-    				mInstance->errorFlag=0;
+    				mInstance->errorFlag=ERR_CLEAR;
 					match(mInstance,op);			//Check Operator
 					right = term(mInstance);		//Get Value Data
 					left= rop(op,left,right);
@@ -5539,7 +5787,7 @@ NUM_TYPE expr(MINIBASIC *mInstance) {
 					}
 				else {
           if(mInstance->errorFlag==ERR_SYNTAX || mInstance->errorFlag==ERR_NOSUCHVARIABLE)    // bah..
-    				mInstance->errorFlag=0;
+    				mInstance->errorFlag=ERR_CLEAR;
 					return left;
 					}
 				break;
@@ -5855,7 +6103,7 @@ NUM_TYPE factor(MINIBASIC *mInstance) {
 			match(mInstance,OPAREN);
 		  t = integer(mInstance, expr(mInstance));
 			match(mInstance,CPAREN);
-			answer = t ? mInstance->errorHandler.errorline : mInstance->errorHandler.errorcode;
+			answer = t ? mInstance->errorHandler.line.line : mInstance->errorHandler.errorcode;
 			break;
 		case STATUSTOK:
 			{
@@ -6943,6 +7191,9 @@ char *stringExpr(MINIBASIC *mInstance) {
 		case INKEYSTRING:
 			left = inkeyString(mInstance);
 			break;
+		case GETKEYSTRING:
+			left = getkeyString(mInstance);
+			break;
 		case MIDISTRING:
 			left = midiString(mInstance);
 			break;
@@ -7135,13 +7386,14 @@ char *timeString(MINIBASIC *mInstance) {
 
 
 /*
-  handle INKEY$ token, based on inkey() (numeric)
+  handle INKEY$ token, based on inkey() (numeric) QUESTA NON ASPETTA
 */
 char *inkeyString(MINIBASIC *mInstance) {
   char buf[2];
 	int i;
   char *answer;
 
+  // verificare con BREAKTHROUGH...
   match(mInstance,INKEYSTRING);
 //  match(mInstance,OPAREN);
 //  match(mInstance,CPAREN);
@@ -7153,6 +7405,58 @@ char *inkeyString(MINIBASIC *mInstance) {
 		}
 	else
 		buf[0]=0;
+  answer = strdup(buf);
+  if(!answer)
+		setError(mInstance,ERR_OUTOFMEMORY);
+
+  return answer;
+	}
+
+/*
+  handle GETKEY$ token, based on inkey() (numeric) QUESTA ASPETTA!
+*/
+char *getkeyString(MINIBASIC *mInstance) {
+  char buf[2];
+	int i;
+  char *answer;
+
+  match(mInstance,GETKEYSTRING);
+//  match(mInstance,OPAREN);
+//  match(mInstance,CPAREN);
+
+  // verificare con BREAKTHROUGH...
+  buf[0]=0;
+	for(;;) {
+    i=mInstance->incomingChar[0];
+    if(i>0) {
+      buf[0]=i;
+      buf[1]=0;
+      break;
+      }
+    handle_events();
+#if defined(USA_USB_HOST) || defined(USA_USB_SLAVE_CDC)
+    SYS_Tasks();
+#ifdef USA_USB_HOST_MSD
+    SYS_FS_Tasks();   // serve, per rapidità...
+#endif
+#else
+    APP_Tasks();
+#endif
+#ifdef USA_WIFI
+    m2m_wifi_handle_events(NULL);
+#endif
+#ifdef USA_ETHERNET
+    StackTask();
+    StackApplications();
+#endif
+    mLED_1 ^= 1;     //  
+    mInstance->incomingChar[0]=keypress.key; mInstance->incomingChar[1]=keypress.modifier;
+    KBClear();
+    if(hitCtrlC(TRUE)) {
+      setError(mInstance,ERR_STOP);
+      break;
+      }
+    }
   answer = strdup(buf);
   if(!answer)
 		setError(mInstance,ERR_OUTOFMEMORY);
@@ -7576,7 +7880,7 @@ char *stringDimVar(MINIBASIC *mInstance) {
   else
 		setError(mInstance,ERR_NOSUCHVARIABLE);
 
-  if(!mInstance->errorFlag)
+  if(mInstance->errorFlag == ERR_CLEAR)
 		if(*answer)
 	     return *answer;
 	 
@@ -8029,7 +8333,7 @@ void match(MINIBASIC *mInstance,TOKEN_NUM tok) {
 */
 /*BSTATIC*/ void setError(MINIBASIC *mInstance,enum INTERPRETER_ERRORS errorcode) {
 
-  if(!mInstance->errorFlag || !errorcode)
+  if(mInstance->errorFlag==ERR_CLEAR || !errorcode)
 		mInstance->errorFlag = errorcode;
 	}
 
@@ -8041,10 +8345,8 @@ void match(MINIBASIC *mInstance,TOKEN_NUM tok) {
   Notes: goes to newline, then finds
          first line starting with a digit.
 */
-LINE_NUMBER_TYPE getNextLine(const char *str) {
+BSTATIC LINE_NUMBER_TYPE getNextLine(MINIBASIC *mInstance,const char *str) {
   
-#warning FINIRE gestendo : multistatement..
-
   while(*str) {
     while(*str && *str != '\n')
 	  	str++;
@@ -8055,6 +8357,37 @@ LINE_NUMBER_TYPE getNextLine(const char *str) {
 	  	return atoi(str);
   	}
   return 0;
+	}
+
+BSTATIC LINE_NUMBER_STMT_POS_TYPE getNextStatement(MINIBASIC *mInstance,const char *str) {
+	LINE_NUMBER_STMT_POS_TYPE answer;
+  int i;
+  
+  i=mInstance->curline;
+  answer.d=STMT_CONTINUE;
+  
+  while(*str && *str != ':' && *str != '\n')    // il ' viene correttamente scartato, come anche sopra! ok
+    str++;
+  switch(*str) {
+    case 0:
+      break;
+    case ':':
+      str++;
+      break;
+    case '\n':
+      i++;
+      str++;
+      break;
+    }
+  str=skipSpaces(str);
+  if(isdigit(*str)) {    // se siamo a riga nuova...
+    while(isdigit(*str))
+      str++;
+    str=skipSpaces(str);
+    }
+  answer.line=i;
+  answer.pos=str-mInstance->lines[i].str;
+	return answer;
 	}
 
 
@@ -8544,6 +8877,7 @@ static const char *skipSpaces(const char *str) {
 // ----------------------------------------------------
 int myTextOut(MINIBASIC *mInstance,const char *s) {
   
+#ifndef USING_SIMULATOR
 #ifdef USA_BREAKTHROUGH
   HDC myDC,*hDC;
   hDC=GetDC(mInstance->hWnd,&myDC);
@@ -8586,12 +8920,14 @@ printLF:
     s++;
     }
 #endif
+#endif
   
   return 1;
   }
 
 int myCR(MINIBASIC *mInstance) {
   
+#ifndef USING_SIMULATOR
   mInstance->Cursor.x=0;  mInstance->Cursor.y++;
   if(mInstance->Cursor.y >= ScreenText.cy) {
     while(isCtrlS());
@@ -8599,9 +8935,11 @@ int myCR(MINIBASIC *mInstance) {
     putchar('\n');    // forzo scroll!
     }
   SetXYText(mInstance->Cursor.x,mInstance->Cursor.y);
+#endif
   return 1;
   }
 
+#if 0
 int inkey(void) {
   BYTE keypress[2];
 //  extern struct KEYPRESS keypress;
@@ -8616,4 +8954,4 @@ int inkey(void) {
 //    ch=tolower(LOBYTE(i));
 
   }
-
+#endif
