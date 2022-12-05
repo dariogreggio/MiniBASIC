@@ -1009,6 +1009,9 @@ int basic(MINIBASIC *mInstance,const char *script,BYTE where) {
           // se no SALTA ALLA RIGA DOPO!! unire con ricerca COLON in line() come anche REM ELSE ecc
       		nextstmt.line=mInstance->curline;
           nextstmt.pos=mInstance->string-mInstance->lines[mInstance->curline].str;
+          if(*mInstance->string == '\n') {   // questo lo gestisco qua, perché ERRORHANDLER va prima del resto e CONTINUE può causare un loop!
+            nextstmt.line++; nextstmt.pos=0;
+            }
           }
         else if(mInstance->errorHandler.handler)	{
 //          LINE_NUMBER_STMT_POS_TYPE oldnextstmt=nextstmt;
@@ -1076,6 +1079,7 @@ handle_error2:
           goto handle_error2;
           }
         else
+set_line:
           mInstance->curline = nextstmt.line;
         }
    		}
@@ -1091,6 +1095,7 @@ handle_error2:
           goto handle_error2;
         mInstance->irqHandler.line.line=mInstance->curline;
         mInstance->irqHandler.line.pos=mInstance->string-mInstance->lines[mInstance->curline].str;
+        goto set_line;
         }
       }
 #endif
@@ -1102,6 +1107,7 @@ handle_error2:
           goto handle_error2;
         mInstance->timerHandler.line.line=mInstance->curline;
         mInstance->timerHandler.line.pos=mInstance->string-mInstance->lines[mInstance->curline].str;
+        goto set_line;
         }
       }
     
@@ -1891,11 +1897,7 @@ print_file_found:
 
 			pendingCR=1;
 			}
-		else
-			pendingCR=1;
-
-
-		if(mInstance->token == COMMA) {
+		else if(mInstance->token == COMMA) {
 //	    putc('\t', fpout);			// should print 8 chars or up to next tab...
       switch(filetype) {
         case FILE_COM:
@@ -1958,7 +1960,7 @@ print_file_found:
         break;
       }
   	}
-  else {
+  else {    // pendingCR
     switch(filetype) {
       case FILE_COM:
         WriteSerial('\r'); WriteSerial('\n');
@@ -5096,6 +5098,9 @@ void doPoint(MINIBASIC *mInstance) {
   else
     c=ColorRGB(mInstance->ColorPalette);
   
+  #warning if(mInstance->errorFlag != ERR_CLEAR)
+  #warning return  // si potrebbe anche.. ovunque
+  
 #ifdef USA_BREAKTHROUGH
   hDC=GetDC(mInstance->hWnd,&myDC);
 //  hDC.pen=CreatePen(PS_SOLID,size,mInstance->Color);
@@ -5120,6 +5125,7 @@ void doPoint(MINIBASIC *mInstance) {
 // no! text  mInstance->Cursor.x=pt.x;
 //  mInstance->Cursor.y=pt.y;
 
+#ifndef USING_SIMULATOR
   if(size==1)
     DrawPixel(pt.x,pt.y,Color24To565(c));
   else {
@@ -5130,6 +5136,7 @@ void doPoint(MINIBASIC *mInstance) {
     rc.bottom=rc.top+size;
     FillRectangle(rc.left,rc.top,rc.right,rc.bottom,Color24To565(c));
     }
+#endif
 #endif
 
   }
