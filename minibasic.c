@@ -14,11 +14,10 @@
  *          2021: PC_PIC motherboard, PIC32MZ
 *****************************************************************/
 
-// cose tipo BEEP non danno errore se manca parametro...
 // if con doppia condizione non va... e/o dà syntax error. v. MANDEL
 // inserire righe non va ancora/è da fare e run pure (v.)
 //   ci vogliono PARENTESI se doppia condizione! ossia pare <= ha priorità inferiore a AND... SISTEMARE
-// (ancora) Syntax error se parola sola
+// cose tipo BEEP non danno errore se manca parametro...
 // In generale, se c'è un errore in uno statement, non si ferma fino a fine statement e rischia pure di eseguirlo con parametro a cazzo...
 //  bisognerebbe STRONCARE, forse con un longjmp da setError?
 //  verificare se string$ possono restituire NULL o serve emptyString
@@ -64,7 +63,7 @@ extern APP_DATA appData;
 extern BYTE SDcardOK,USBmemOK,HDOK,FDOK;
 extern BYTE *RAMdiscArea;
 
-#define MINIBASIC_COPYRIGHT_STRING "MiniBasic for PIC32MZ v2.2.5 - 5/12/2022\n"
+#define MINIBASIC_COPYRIGHT_STRING "MiniBasic for PIC32MZ v2.2.5 - 6/12/2022\n"
 
 
 #undef stricmp    // per at_winc1500 ... £$%@#
@@ -199,6 +198,7 @@ enum __attribute((packed)) {
 #endif
   
 	SIN,
+  FIRST_NUM_FUNCTION=SIN,
 	COS,
 	TAN,
 	LOG,
@@ -238,8 +238,10 @@ enum __attribute((packed)) {
 	TEMPERATURE,
 	RSSI,
   BIOS,
+  LAST_NUM_FUNCTION=BIOS,
 
 	CHRSTRING,
+  FIRST_CHAR_FUNCTION=CHRSTRING,
 	STRSTRING,
 	LEFTSTRING,
 	RIGHTSTRING,
@@ -262,6 +264,7 @@ enum __attribute((packed)) {
   CURDRIVESTRING,
 	IPADDRESSSTRING,
 	ACCESSPOINTSSTRING,
+  LAST_CHAR_FUNCTION=ACCESSPOINTSSTRING,
 	};
 
 
@@ -277,22 +280,22 @@ enum REL_OPS {
 	};
 
 
-static void doLine(MINIBASIC *);
-static void doRectangle(MINIBASIC *);
-static void doCircle(MINIBASIC *);
-static void doEllipse(MINIBASIC *);
-static void doArc(MINIBASIC *);
-static void doTriangle(MINIBASIC *);
-static void doPoint(MINIBASIC *);
-static void doFill(MINIBASIC *);
-static void doSetcolor(MINIBASIC *);
-static void doSetBkcolor(MINIBASIC *);
-static void doBitblt(MINIBASIC *);
+BSTATIC void doLine(MINIBASIC *);
+BSTATIC void doRectangle(MINIBASIC *);
+BSTATIC void doCircle(MINIBASIC *);
+BSTATIC void doEllipse(MINIBASIC *);
+BSTATIC void doArc(MINIBASIC *);
+BSTATIC void doTriangle(MINIBASIC *);
+BSTATIC void doPoint(MINIBASIC *);
+BSTATIC void doFill(MINIBASIC *);
+BSTATIC void doSetcolor(MINIBASIC *);
+BSTATIC void doSetBkcolor(MINIBASIC *);
+BSTATIC void doBitblt(MINIBASIC *);
 
 
 //BSTATIC int inkey(void);
   
-static const char * const error_msgs[] = {
+BSTATIC const char * const error_msgs[] = {
 	"",
 	"Syntax error",
 	"Out of memory",
@@ -327,9 +330,9 @@ static const char * const error_msgs[] = {
 
 
 
-static const char * const EmptyString="";
+BSTATIC const char * const EmptyString="";
 
-static TOKEN_LIST const tl[] = {
+BSTATIC TOKEN_LIST const tl[] = {
 	{ "PRINT",5 },
 	{ "?",1 },
 	{ "LET",3 },
@@ -1749,198 +1752,219 @@ void doPrint(MINIBASIC *mInstance) {
   	}
 
 print_file_found:
-  while(1) {
-    if(isString(mInstance->token)) {
-      str = stringExpr(mInstance);
-// if errorFlag NON dovrebbe stampare...
-	  	if(str) {
+  for(;;) {
+		switch(mInstance->token) {
+			default:
+				if(isString(mInstance->token)) {
+					// case STRID QUOTE DIMSTRID, CHRSTRING ecc ma meglio così
+					str = stringExpr(mInstance);
+		// if errorFlag NON dovrebbe stampare...
+	  			if(str) {
+						switch(filetype) {
+							case FILE_COM:
+							{
+								char *p=str;
+								while(*p)
+									WriteSerial(*p++);
+							}
+								break;
+		#ifdef USA_USB_SLAVE_CDC
+							case FILE_CDC:
+								printf("%s",str);
+								break;
+		#endif
+		#ifdef USA_WIFI
+							case FILE_TCP:
+								strcat(rxBuffer,str);
+								break;
+							case FILE_UDP:
+								strcat(rxBuffer,str);
+								break;
+		#endif
+							case FILE_DISK:
+								if(SuperFileWrite(ftemp,str,strlen(str)) != strlen(str)) {     // 
+									setError(mInstance,ERR_FILE);
+									}
+								break;
+							default:
+								myTextOut(mInstance,str);
+								break;
+							}
+						pendingCR=1;
+						free(str);
+	  				}
+  				}
+        else if(mInstance->token >= FIRST_NUM_FUNCTION && mInstance->token <= LAST_NUM_FUNCTION)
+          goto is_value;
+        else
+          goto fine;
+				break;
+			case FLTID:
+			case DIMFLTID:
+			case VALUE:
+				{
+					static long n;
+					static char buf[20];
+
+is_value:
+	  			x = expr(mInstance);
+		// if errorFlag NON dovrebbe stampare...
+
+		//			x -= (double)(long)x;
+		//			n=x*1000000.0;
+					n=(long) (fabs(x - (double)(long)x ) * 1000000.0);
+		//	  	fprintf(fpout, (STRINGFARPTR)"%g", x);
+					if(n)	{	// un trucchetto per stampare interi o float
+						unsigned char i;
+        
+						// metto lo spazio prima dei numeri... se non negativi...
+  					if(x>=0)
+    					sprintf(buf,(STRINGFARPTR)" %ld.%06lu", (long) x, (long) n); 
+						else
+    					sprintf(buf,(STRINGFARPTR)"%ld.%06lu", (long) x, (long) n); 
+						for(i=strlen(buf)-1; i; i--) {
+							if(buf[i] == '0')
+								buf[i]=0;
+							else
+								break;
+							}
+						}
+					else {
+  					if(x>=0)
+  						sprintf(buf," %ld", (long)x); 	// metto lo spazio prima dei numeri... se non negativi...
+						else
+							sprintf(buf,"%ld", (long)x); 
+						}
+					switch(filetype) {
+						case FILE_COM:
+							{
+								char *p=buf;
+								while(*p)
+									WriteSerial(*p++);
+							}
+							break;
+		#ifdef USA_USB_SLAVE_CDC
+						case FILE_CDC:
+							printf("%s",buf);
+							break;
+		#endif
+		#ifdef USA_WIFI
+						case FILE_TCP:
+							strcat(rxBuffer,buf);
+							break;
+						case FILE_UDP:
+							strcat(rxBuffer,buf);
+							break;
+		#endif
+						case FILE_DISK:
+							if(SuperFileWrite(ftemp,buf,strlen(buf)) != strlen(buf)) {     // 
+								setError(mInstance,ERR_FILE);
+								}
+							break;
+						default:
+							myTextOut(mInstance,buf);
+							break;
+						}
+
+					pendingCR=1;
+					}
+				break;
+			case INTID:
+			case DIMINTID:
+				{
+					int16_t i;
+
+					i=integer(mInstance,expr(mInstance));
+					{
+					char buf[16];
+					if(i>=0)
+    				sprintf(buf," %d",i);	// metto lo spazio prima dei numeri... se non negativi...
+					else
+						sprintf(buf,"%d",i);
+					switch(filetype) {
+						case FILE_COM:
+							{
+								char *p=buf;
+								while(*p)
+									WriteSerial(*p++);
+							}
+							break;
+		#ifdef USA_USB_SLAVE_CDC
+						case FILE_CDC:
+							printf("%s",buf);
+							break;
+		#endif
+		#ifdef USA_WIFI
+						case FILE_TCP:
+							strcat(rxBuffer,buf);
+							break;
+						case FILE_UDP:
+							strcat(rxBuffer,buf);
+							break;
+		#endif
+						case FILE_DISK:
+							if(SuperFileWrite(ftemp,buf,strlen(buf)) != strlen(buf)) {     // 
+								setError(mInstance,ERR_FILE);
+								}
+							break;
+						default:
+							myTextOut(mInstance,buf);
+							break;
+						}
+					}
+					pendingCR=1;
+					}
+				break;
+			case COMMA:
+	//	    putc('\t', fpout);			// should print 8 chars or up to next tab...
 				switch(filetype) {
 					case FILE_COM:
-          {
-            char *p=str;
-            while(*p)
-              WriteSerial(*p++);
-          }
+						WriteSerial(' ');
 						break;
-#ifdef USA_USB_SLAVE_CDC
+	#ifdef USA_USB_SLAVE_CDC
 					case FILE_CDC:
-            printf("%s",str);
+						putchar(' ');
 						break;
-#endif
-#ifdef USA_WIFI
+	#endif
+	#ifdef USA_WIFI
 					case FILE_TCP:
-            strcat(rxBuffer,str);
+						strcat(rxBuffer," ");
 						break;
 					case FILE_UDP:
-            strcat(rxBuffer,str);
+						strcat(rxBuffer," ");
 						break;
-#endif
+	#endif
 					case FILE_DISK:
-            if(SuperFileWrite(ftemp,str,strlen(str)) != strlen(str)) {     // 
-              setError(mInstance,ERR_FILE);
-              }
+						if(SuperFileWrite(ftemp," ",1) != 1) {     // 
+							setError(mInstance,ERR_FILE);
+							}
 						break;
-          default:
-            myTextOut(mInstance,str);
-						break;
-					}
-
-				pendingCR=1;
-        free(str);
-	  		}
-			}
-		else if(mInstance->token == INTID) {
-			int16_t i;
-
-			i=integer(mInstance,expr(mInstance));
-      {
-      char buf[16];
-			if(i>=0)
-    	  sprintf(buf," %d",i);	// metto lo spazio prima dei numeri... se non negativi...
-      else
-        sprintf(buf,"%d",i);
-      switch(filetype) {
-        case FILE_COM:
-          {
-            char *p=buf;
-            while(*p)
-              WriteSerial(*p++);
-          }
-          break;
-#ifdef USA_USB_SLAVE_CDC
-        case FILE_CDC:
-          printf("%s",buf);
-          break;
-#endif
-#ifdef USA_WIFI
-        case FILE_TCP:
-          strcat(rxBuffer,buf);
-          break;
-        case FILE_UDP:
-          strcat(rxBuffer,buf);
-          break;
-#endif
-        case FILE_DISK:
-          if(SuperFileWrite(ftemp,buf,strlen(buf)) != strlen(buf)) {     // 
-            setError(mInstance,ERR_FILE);
-            }
-          break;
-        default:
-          myTextOut(mInstance,buf);
-          break;
-        }
-      }
-			pendingCR=1;
-			}
-		else if(mInstance->token != EOS && mInstance->token != EOL && mInstance->token != COLON) /*if(mInstance->token == VALUE || mInstance->token == FLTID) */{
-			static long n;
-			static char buf[20];
-
-	  	x = expr(mInstance);
-// if errorFlag NON dovrebbe stampare...
-
-//			x -= (double)(long)x;
-//			n=x*1000000.0;
-			n=(long) (fabs(x - (double)(long)x ) * 1000000.0);
-//	  	fprintf(fpout, (STRINGFARPTR)"%g", x);
-			if(n)	{	// un trucchetto per stampare interi o float
-				unsigned char i;
-        
-        // metto lo spazio prima dei numeri... se non negativi...
-  			if(x>=0)
-    			sprintf(buf,(STRINGFARPTR)" %ld.%06lu", (long) x, (long) n); 
-        else
-    			sprintf(buf,(STRINGFARPTR)"%ld.%06lu", (long) x, (long) n); 
-				for(i=strlen(buf)-1; i; i--) {
-					if(buf[i] == '0')
-						buf[i]=0;
-					else
+					default:
+						do {
+							/*mInstance->Cursor.x += */ myTextOut(mInstance," ");
+							} while(mInstance->Cursor.x % (ScreenText.cx>25 ? 8 : 4));   // bah, sì
 						break;
 					}
-				}
-			else {
-  			if(x>=0)
-  				sprintf(buf," %ld", (long)x); 	// metto lo spazio prima dei numeri... se non negativi...
-        else
-          sprintf(buf,"%ld", (long)x); 
-        }
-      switch(filetype) {
-        case FILE_COM:
-          {
-            char *p=buf;
-            while(*p)
-              WriteSerial(*p++);
-          }
-          break;
-#ifdef USA_USB_SLAVE_CDC
-        case FILE_CDC:
-          printf("%s",buf);
-          break;
-#endif
-#ifdef USA_WIFI
-        case FILE_TCP:
-          strcat(rxBuffer,buf);
-          break;
-        case FILE_UDP:
-          strcat(rxBuffer,buf);
-          break;
-#endif
-        case FILE_DISK:
-          if(SuperFileWrite(ftemp,buf,strlen(buf)) != strlen(buf)) {     // 
-            setError(mInstance,ERR_FILE);
-            }
-          break;
-        default:
-          myTextOut(mInstance,buf);
-          break;
-        }
 
-			pendingCR=1;
+	  		match(mInstance,COMMA);
+				pendingCR=0;
+				break;
+			case SEMICOLON:
+	  		match(mInstance,SEMICOLON);
+				pendingCR=0;
+	  		break;
+			case EOL:
+			case EOS:
+			case REM:
+			case REM2:
+        goto fine;
+	  		break;
 			}
-		else if(mInstance->token == COMMA) {
-//	    putc('\t', fpout);			// should print 8 chars or up to next tab...
-      switch(filetype) {
-        case FILE_COM:
-          WriteSerial(' ');
-          break;
-#ifdef USA_USB_SLAVE_CDC
-        case FILE_CDC:
-          putchar(' ');
-          break;
-#endif
-#ifdef USA_WIFI
-        case FILE_TCP:
-          strcat(rxBuffer," ");
-          break;
-        case FILE_UDP:
-          strcat(rxBuffer," ");
-          break;
-#endif
-        case FILE_DISK:
-          if(SuperFileWrite(ftemp," ",1) != 1) {     // 
-            setError(mInstance,ERR_FILE);
-            }
-          break;
-        default:
-					do {
-						/*mInstance->Cursor.x += */ myTextOut(mInstance," ");
-						} while(mInstance->Cursor.x % (ScreenText.cx>25 ? 8 : 4));   // bah, sì
-          break;
-        }
-
-	  	match(mInstance,COMMA);
-			pendingCR=0;
-			}
-		else if(mInstance->token == SEMICOLON) {
-	  	match(mInstance,SEMICOLON);
-			pendingCR=0;
-			}
-		else
-	  	break;
   	}
 
 // naturalmente, se rxBuffer sfora, errore?!  diverso tra tcp e udp..
 // ev. cmq anche SuperFile e 
+fine:
   
   if(!pendingCR /*token == SEMICOLON*/) {
 //		match(mInstance,SEMICOLON);
@@ -2047,17 +2071,17 @@ void doLocate(MINIBASIC *mInstance) {
 
 	match(mInstance,LOCATE);
   x = integer(mInstance,expr(mInstance));
-  if(x < 0 || x >= ScreenText.cx)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   y = integer(mInstance,expr(mInstance));
-  if(y < 0 || y >= ScreenText.cy)
-		setError(mInstance, ERR_BADVALUE);
 
-  if(mInstance->errorFlag == ERR_CLEAR) {  // qua evitiamo cazzate ;)
-    mInstance->Cursor.x=x;
-    mInstance->Cursor.y=y;
+  if((x < 0 || x >= ScreenText.cx) || 
+    (y < 0 || y >= ScreenText.cy)) {
+		setError(mInstance, ERR_BADVALUE);
+    return;
     }
+  
+  mInstance->Cursor.x=x;
+  mInstance->Cursor.y=y;
 	}
 
 
@@ -2087,7 +2111,7 @@ LINE_NUMBER_STMT_POS_TYPE doOn(MINIBASIC *mInstance) {
         mInstance->errorHandler.handler = -1;
         break;
       case STOP:
-        match(mInstance,STOP);
+        match(mInstance,STOP);    // GOTO 0 dovrebbe essere uguale :)
         mInstance->errorHandler.handler = 0;
         break;
       default:
@@ -4756,21 +4780,12 @@ void doLine(MINIBASIC *mInstance) {
 
   match(mInstance,LINETOK);
   pt1.x = integer(mInstance,expr(mInstance));
-  if(pt1.x < 0 || pt1.x > Screen.cx)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   pt1.y = integer(mInstance,expr(mInstance));
-  if(pt1.y < 0 || pt1.y > Screen.cy)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   pt2.x = integer(mInstance,expr(mInstance));
-  if(pt2.x < 0 || pt2.x > Screen.cx)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   pt2.y = integer(mInstance,expr(mInstance));
-  if(pt2.y < 0 || pt2.y > Screen.cy)
-		setError(mInstance, ERR_BADVALUE);
-
   if(mInstance->token == COMMA) {
     match(mInstance,COMMA);
     size=integer(mInstance,expr(mInstance));
@@ -4778,6 +4793,14 @@ void doLine(MINIBASIC *mInstance) {
   else
     size=1;
   
+  if((pt1.x < 0 || pt1.x > Screen.cx) ||
+    (pt1.y < 0 || pt1.y > Screen.cy) ||
+    (pt2.x < 0 || pt2.x > Screen.cx) ||
+    (pt2.y < 0 || pt2.y > Screen.cy)) {
+		setError(mInstance, ERR_BADVALUE);
+    return;
+    }
+
 #ifdef USA_BREAKTHROUGH
   hDC=GetDC(mInstance->hWnd,&myDC);
   hDC->pen=CreatePen(PS_SOLID,size,Color24To565(mInstance->Color));
@@ -4803,20 +4826,12 @@ void doRectangle(MINIBASIC *mInstance) {
 
   match(mInstance,RECTANGLE);
   pt[0].x = integer(mInstance,expr(mInstance));
-  if(pt[0].x < 0 || pt[0].x > Screen.cx)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   pt[0].y = integer(mInstance,expr(mInstance));
-  if(pt[0].y < 0 || pt[0].y > Screen.cy)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   pt[1].x = integer(mInstance,expr(mInstance));
-  if(pt[1].x < 0 || pt[1].x > Screen.cx)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   pt[1].y = integer(mInstance,expr(mInstance));
-  if(pt[1].y < 0 || pt[1].y > Screen.cy)
-		setError(mInstance, ERR_BADVALUE);
 	
   if(mInstance->token == COMMA) {
     match(mInstance,COMMA);
@@ -4831,6 +4846,14 @@ void doRectangle(MINIBASIC *mInstance) {
   else
     filled=0;
   
+  if((pt[0].x < 0 || pt[0].x > Screen.cx) ||
+    (pt[0].y < 0 || pt[0].y > Screen.cy) ||
+    (pt[1].x < 0 || pt[1].x > Screen.cx) ||
+    (pt[1].y < 0 || pt[1].y > Screen.cy)) {
+		setError(mInstance, ERR_BADVALUE);
+    return;
+    }
+
 #ifdef USA_BREAKTHROUGH
   hDC=GetDC(mInstance->hWnd,&myDC);
   hDC->pen=CreatePen(PS_SOLID,size,Color24To565(mInstance->Color));
@@ -4855,28 +4878,16 @@ void doTriangle(MINIBASIC *mInstance) {
 
   match(mInstance,TRIANGLE);
   pt[3].x = pt[0].x = integer(mInstance,expr(mInstance));
-  if(pt[0].x < 0 || pt[0].x > Screen.cx)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   pt[3].y = pt[0].y = integer(mInstance,expr(mInstance));
-  if(pt[0].y < 0 || pt[0].y > Screen.cy)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   pt[1].x = integer(mInstance,expr(mInstance));
-  if(pt[1].x < 0 || pt[1].x > Screen.cx)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   pt[1].y = integer(mInstance,expr(mInstance));
-  if(pt[1].y < 0 || pt[1].y > Screen.cy)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   pt[2].x = integer(mInstance,expr(mInstance));
-  if(pt[2].x < 0 || pt[2].x > Screen.cx)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   pt[2].y = integer(mInstance,expr(mInstance));
-  if(pt[2].y < 0 || pt[2].y > Screen.cy)
-		setError(mInstance, ERR_BADVALUE);
 	
   if(mInstance->token == COMMA) {
     match(mInstance,COMMA);
@@ -4890,6 +4901,16 @@ void doTriangle(MINIBASIC *mInstance) {
     }
   else
     filled=0;
+  
+  if((pt[0].x < 0 || pt[0].x > Screen.cx) ||
+    (pt[0].y < 0 || pt[0].y > Screen.cy) ||
+    (pt[1].x < 0 || pt[1].x > Screen.cx) ||
+    (pt[1].y < 0 || pt[1].y > Screen.cy) ||
+    (pt[2].x < 0 || pt[2].x > Screen.cx) ||
+    (pt[2].y < 0 || pt[2].y > Screen.cy)) {
+		setError(mInstance, ERR_BADVALUE);
+    return;
+    }
   
 #ifdef USA_BREAKTHROUGH
   hDC=GetDC(mInstance->hWnd,&myDC);
@@ -4918,12 +4939,8 @@ void doEllipse(MINIBASIC *mInstance) {
 
   match(mInstance,ELLIPSE);
   pt.x = integer(mInstance,expr(mInstance));
-  if(pt.x < 0 || pt.x > Screen.cx)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   pt.y = integer(mInstance,expr(mInstance));
-  if(pt.y < 0 || pt.y > Screen.cy)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   rx = integer(mInstance,expr(mInstance));
   match(mInstance,COMMA);
@@ -4948,6 +4965,13 @@ void doEllipse(MINIBASIC *mInstance) {
   else
     filled=0;
   
+  if((pt.x < 0 || pt.x > Screen.cx) ||
+    (pt.y < 0 || pt.y > Screen.cy)) {
+    // rx ry??
+		setError(mInstance, ERR_BADVALUE);
+    return;
+    }
+
   // FINIRE ellipse!
 #ifdef USA_BREAKTHROUGH
   hDC=GetDC(mInstance->hWnd,&myDC);
@@ -4975,12 +4999,8 @@ void doCircle(MINIBASIC *mInstance) {
 
   match(mInstance,CIRCLE);
   pt.x = integer(mInstance,expr(mInstance));
-  if(pt.x < 0 || pt.x > Screen.cx)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   pt.y = integer(mInstance,expr(mInstance));
-  if(pt.y < 0 || pt.y > Screen.cy)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   r = integer(mInstance,expr(mInstance));
 /* boh... non so se è il caso
@@ -5003,6 +5023,12 @@ void doCircle(MINIBASIC *mInstance) {
   else
     filled=0;
   
+  if((pt.x < 0 || pt.x > Screen.cx) ||
+    (pt.y < 0 || pt.y > Screen.cy)) {
+    // r??
+		setError(mInstance, ERR_BADVALUE);
+    return;
+    }
 #ifdef USA_BREAKTHROUGH
   hDC=GetDC(mInstance->hWnd,&myDC);
   hDC->pen=CreatePen(PS_SOLID,size,Color24To565(mInstance->Color));
@@ -5028,20 +5054,12 @@ void doArc(MINIBASIC *mInstance) {
 
   match(mInstance,ARC);
   x1 = integer(mInstance,expr(mInstance));
-  if(x1 < 0 || x1 > Screen.cx)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   y1 = integer(mInstance,expr(mInstance));
-  if(y1 < 0 || y1 > Screen.cy)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   x2 = integer(mInstance,expr(mInstance));
-  if(x2 < 0 || x2 > Screen.cx)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   y2 = integer(mInstance,expr(mInstance));
-  if(y2 < 0 || y2 > Screen.cy)
-		setError(mInstance, ERR_BADVALUE);
 
   if(mInstance->token == COMMA) {
     match(mInstance,COMMA);
@@ -5049,6 +5067,14 @@ void doArc(MINIBASIC *mInstance) {
     }
   else
     size=1;
+  
+  if((x1 < 0 || x1 > Screen.cx) ||
+    (y1 < 0 || y1 > Screen.cy) ||
+    (x2 < 0 || x2 > Screen.cx) ||
+    (y2 < 0 || y2 > Screen.cy)) {
+		setError(mInstance, ERR_BADVALUE);
+    return;
+    }
   
 #ifdef USA_BREAKTHROUGH
   hDC=GetDC(mInstance->hWnd,&myDC);
@@ -5068,12 +5094,8 @@ void doPoint(MINIBASIC *mInstance) {
 
   match(mInstance,POINTTOK);
   pt.x = integer(mInstance,expr(mInstance));
-  if(pt.x < 0 || pt.x > Screen.cx)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   pt.y = integer(mInstance,expr(mInstance));
-  if(pt.y < 0 || pt.y > Screen.cy)
-		setError(mInstance, ERR_BADVALUE);
   
   if(mInstance->token == COMMA) {   // può seguire size...
     match(mInstance,COMMA);
@@ -5098,8 +5120,11 @@ void doPoint(MINIBASIC *mInstance) {
   else
     c=ColorRGB(mInstance->ColorPalette);
   
-  #warning if(mInstance->errorFlag != ERR_CLEAR)
-  #warning return  // si potrebbe anche.. ovunque
+  if((pt.x < 0 || pt.x > Screen.cx) ||
+    (pt.y < 0 || pt.y > Screen.cy)) {
+		setError(mInstance, ERR_BADVALUE);
+    return;
+    }
   
 #ifdef USA_BREAKTHROUGH
   hDC=GetDC(mInstance->hWnd,&myDC);
@@ -5149,12 +5174,8 @@ void doFill(MINIBASIC *mInstance) {
 
   match(mInstance,FILL);
   pt.x = integer(mInstance,expr(mInstance));
-  if(pt.x < 0 || pt.x > Screen.cx)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   pt.y = integer(mInstance,expr(mInstance));
-  if(pt.y < 0 || pt.y > Screen.cy)
-		setError(mInstance, ERR_BADVALUE);
   
   match(mInstance,COMMA);
   c = expr(mInstance);
@@ -5185,6 +5206,12 @@ void doFill(MINIBASIC *mInstance) {
       }
     }
   
+  if((pt.x < 0 || pt.x > Screen.cx) ||
+    (pt.y < 0 || pt.y > Screen.cy)) {
+		setError(mInstance, ERR_BADVALUE);
+    return;
+    }
+
 #ifdef USA_BREAKTHROUGH
   hDC=GetDC(mInstance->hWnd,&myDC);
 //  hDC.pen=CreatePen(PS_SOLID,size,mInstance->Color);
@@ -5226,6 +5253,7 @@ void doSetcolor(MINIBASIC *mInstance) {
 		mInstance->ColorPalette=textColors[c];
 		mInstance->Color=ColorRGB(mInstance->ColorPalette);
 		}
+  
   SetColors(Color24To565(mInstance->Color),Color24To565(mInstance->ColorBK)); // questo serve cmq per printf/putchar
 	}
 
@@ -5247,6 +5275,7 @@ void doSetBkcolor(MINIBASIC *mInstance) {
 	  mInstance->ColorPaletteBK=textColors[c];
 		mInstance->ColorBK=ColorRGB(mInstance->ColorPaletteBK);
 		}
+  
   SetColors(Color24To565(mInstance->Color),Color24To565(mInstance->ColorBK)); // questo serve cmq per printf/putchar
 	}
 
@@ -5263,20 +5292,12 @@ void doBitblt(MINIBASIC *mInstance) {
 
   match(mInstance,BITBLT);
   pt.x = integer(mInstance,expr(mInstance));
-  if(pt.x < 0 || pt.x > Screen.cx)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   pt.y = integer(mInstance,expr(mInstance));
-  if(pt.y < 0 || pt.y > Screen.cy)
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   sz.cx = integer(mInstance,expr(mInstance));
-  if(sz.cx < 0 || sz.cx >= Screen.cx)    // + pt.x ...
-		setError(mInstance, ERR_BADVALUE);
   match(mInstance,COMMA);
   sz.cy = integer(mInstance,expr(mInstance));
-  if(sz.cy < 0 || sz.cy >= Screen.cy)
-		setError(mInstance, ERR_BADVALUE);
 	
   match(mInstance,COMMA);
   getId(mInstance,mInstance->string, id, &len);
@@ -5295,6 +5316,14 @@ void doBitblt(MINIBASIC *mInstance) {
   else
     size=1;
 
+  if((pt.x < 0 || pt.x > Screen.cx) ||
+    (pt.y < 0 || pt.y > Screen.cy) ||
+    (sz.cx < 0 || sz.cx >= Screen.cx) ||    // + pt.x ...
+    (sz.cy < 0 || sz.cy >= Screen.cy)) {
+		setError(mInstance, ERR_BADVALUE);
+    return;
+    }
+  
   if(dimvar->ndims==1) {
 #ifdef USA_BREAKTHROUGH
     hDC=GetDC(mInstance->hWnd,&myDC);
@@ -8576,11 +8605,19 @@ signed char isString(TOKEN_NUM token) {
 //	unsigned char a=CHRSTRING;
 
   if(token == STRID || token == QUOTE || token == DIMSTRID 
-		|| token >= CHRSTRING
+		|| (token >= FIRST_CHAR_FUNCTION && token <= LAST_CHAR_FUNCTION)
 /*	  || token == CHRSTRING || token == STRSTRING 
 	  || token == LEFTSTRING || token == RIGHTSTRING 
 	  || token == MIDSTRING || token == STRINGSTRING || token == HEXSTRING
 		|| token == TRIMSTRING || token == INKEYSTRING || token == ERRORSTRING */ )
+		return 1;
+  return 0;
+	}
+
+signed char isNumber(TOKEN_NUM token) {   // per ora non usata ma .. v. doPrint
+
+  if(token == INTID || token == FLTID || token == DIMINTID || token == DIMFLTID || token == VALUE 
+		|| (token >= FIRST_NUM_FUNCTION && token <= LAST_NUM_FUNCTION))
 		return 1;
   return 0;
 	}
