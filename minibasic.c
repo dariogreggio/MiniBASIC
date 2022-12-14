@@ -1978,7 +1978,7 @@ print_outbuf:
                 }
               if(strchr(strUsing,'^')) {  // 
                 char *p;
-                sprintf(buf,"%e",x);    // opp https://stackoverflow.com/questions/19083152/convert-floating-point-to-scientific-notation-in-c-nonstandard-format
+//                sprintf(buf,"%e",x);    // opp https://stackoverflow.com/questions/19083152/convert-floating-point-to-scientific-notation-in-c-nonstandard-format
                 int8_t exponent;
                 double mantissa;
                 align=1;    // direi
@@ -1989,7 +1989,7 @@ print_outbuf:
                   while(*p--=='#')
                     exponent++;
                   mantissa = x / pow(10, (int)log10(fabs(x))-exponent+1);
-                  sprintf(buf,"%fE%d", mantissa, (int)log10(fabs(x))-exponent+1);   // così pare ok, 14/12/22
+                  sprintf(buf,"%fE%+d", mantissa, (int)log10(fabs(x))-exponent+1);   // così pare ok, 14/12/22
                   }
                 else {
 //                  exponent = (int)log10(fabs(x));
@@ -1998,9 +1998,10 @@ print_outbuf:
                   while(*p++=='#')
                     exponent++;
                   mantissa = x / pow(10, exponent-1);
-                  sprintf(buf,"%fE%d", mantissa, (int)log10(fabs(x))-exponent+1);   // così pare ok, 14/12/22
+                  sprintf(buf,"%fE%+d", mantissa, (int)log10(fabs(x))-exponent+1);   // così pare ok, 14/12/22
                   }
 //                sprintf(buf,"%fE%d", mantissa, exponent);
+                // NON prende %+02d per avere 2 cifre e il segno... ma cmq non volevo sprecare spazio e lo 0 non mi interssa :D
                 exppos=strichr(buf,'E');
                 *exppos=0;
                 }
