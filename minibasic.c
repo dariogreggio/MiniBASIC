@@ -1473,8 +1473,7 @@ BSTATIC LINE_NUMBER_STMT_POS_TYPE findData(MINIBASIC *mInstance) {
   if(mInstance->readDataPtr.d) {
     i=mInstance->readDataPtr.line;
     
-rifo:
-		p = mInstance->lines[i].str+mInstance->readDataPtr.pos;
+		p = skipSpaces(mInstance->lines[i].str+mInstance->readDataPtr.pos);
 		t=getToken(p);
     switch(t) {
       case DATA:
@@ -1483,28 +1482,36 @@ rifo:
       case EOL:
         i++;
         if(i<mInstance->nlines) {
+          mInstance->readDataPtr.line=i;
           mInstance->readDataPtr.pos=0;
-          goto rifo;
+          goto new_line;
           }
         // altrimenti esce idem
       case EOS:
 // gestito dal chiamante..        setError(mInstance,ERR_OUTOFDATA);
         return answer;
         break;
+      case COMMA:
+        p += tokenLen(mInstance,p,t);
+        
       default:
         answer.line=i;
-        answer.pos=mInstance->string-mInstance->lines[i].str;
+        answer.pos=p-mInstance->lines[i].str;
+        return answer;
         break;
       }
     }
   for(i=mInstance->readDataPtr.line; i<mInstance->nlines; i++) {
+    
+new_line:
 		p = mInstance->lines[i].str;
 		t=getToken(p);    // dev'essere VALUE = #riga
-    p += tokenLen(mInstance, p, mInstance->token);
+    p=skipSpaces(p);
+    p += tokenLen(mInstance,p,t);
 		if((t=getToken(p)) == DATA) {    // dev'essere DATA
 data_found:
-      p += tokenLen(mInstance, p, mInstance->token);
       p=skipSpaces(p);
+      p += tokenLen(mInstance,p,t);
       answer.line=i;
       answer.pos=p-mInstance->lines[i].str;
       return answer;
@@ -1610,6 +1617,7 @@ rifo:
 		  break;
 		case DEF:
 		  doDef(mInstance);
+      goto do_rem;
 		  break;
 		case DIM:
 		  doDim(mInstance);
@@ -1715,6 +1723,7 @@ do_rem:
 		  break;
 		case DATA:
 		  doData(mInstance);
+      goto do_rem;
 		  break;
 		case READ:
 		  doRead(mInstance);
@@ -1781,7 +1790,8 @@ do_rem:
 
 	if(answer.d==STMT_CONTINUE) {  
     // CREDO SIA INUTILE ORA, v. REM ELSE sopra!
-	  if(mInstance->token == ELSE || mInstance->token==REM || mInstance->token==REM2) {
+	  if(mInstance->token == ELSE || mInstance->token==REM || mInstance->token==REM2 || 
+      mInstance->token==DATA || mInstance->token==DEF) {
 			goto do_rem;
 			}
 
@@ -3626,19 +3636,21 @@ void doEEPoke(MINIBASIC *mInstance) {
 
 BSTATIC void doData(MINIBASIC *mInstance) {
   
+  match(mInstance,DATA);
+  
   if(!mInstance->script) {
     setError(mInstance,ERR_INVALIDDIRECT);
     return;
     }
-  
-//  match(mInstance,DATA);
-  doRem(mInstance);
   }
 
 BSTATIC void doRead(MINIBASIC *mInstance) {
   LINE_NUMBER_STMT_POS_TYPE answer;
   LINE_NUMBER_STMT_POS_TYPE oldpos;
   LVALUE lv;
+//  char id[IDLENGTH];
+  IDENT_LEN len;
+  TOKEN_NUM tok;
   
   match(mInstance,READ);
   if(!mInstance->script) {
@@ -3646,38 +3658,56 @@ BSTATIC void doRead(MINIBASIC *mInstance) {
     return;
     }
   
+rifo:
   answer=findData(mInstance);
   if(answer.d != -1) {
-rifo:
+//  	getId(mInstance, mInstance->string, id, &len);
+    lvalue(mInstance,&lv);
+    tok=mInstance->token;
     oldpos.line=mInstance->curline;
     oldpos.pos=mInstance->string-mInstance->lines[mInstance->curline].str;
     mInstance->curline=answer.line;
-    mInstance->string=mInstance->lines[mInstance->curline].str+answer.pos;
-    lvalue(mInstance,&lv);
+    mInstance->string=skipSpaces(mInstance->lines[mInstance->curline].str+answer.pos);
     switch(lv.type) {
-      char *temp;
       case FLTID:
-        *lv.d.dval = expr(mInstance);
-        // qua dovremmo accettare solo LITERAL value..
+        *lv.d.dval = getValue(mInstance->string, &len);
+        mInstance->string+=len;
         break;
       case INTID:
-        *lv.d.ival = integerExpr(mInstance);
-        // qua dovremmo accettare solo LITERAL value..
+        *lv.d.ival = integer(mInstance,getValue(mInstance->string,&len));
+        mInstance->string+=len;
         break;
       case STRID:
-        temp = *lv.d.sval;
-        *lv.d.sval = stringExpr(mInstance);
+        {
+          char *temp = *lv.d.sval;
+          char *end = mystrend((const char *)mInstance->string,'"');
+          if(end) {
+            len = end - mInstance->string;
+            // usare MAXSTRINGLEN
+            *lv.d.sval = (char *)malloc(len);
+            if(!*lv.d.sval)
+              setError(mInstance,ERR_OUTOFMEMORY);
+      	  	else
+              mystrgrablit(*lv.d.sval,mInstance->string);
+            }
+//          else {
+//            end = mystrend((const char *)mInstance->string, ','); così cmq non va, ev. modificare
         // se stringa, accettare tutto? e convertire?
-        // qua dovremmo accettare solo LITERAL value..
+//            }
+        mInstance->string+=len+1; // mystrend ritorna 1+len... credo sia una cazzata!
         if(temp)
           free(temp);
+        }
         break;
       }
-    if(mInstance->token == COMMA)
-      match(mInstance,COMMA);
-    mInstance->readDataPtr=answer;
+    mInstance->string=skipSpaces(mInstance->string);
+    if(*mInstance->string == ',')
+      mInstance->string++;
+    mInstance->readDataPtr.line=mInstance->curline;
+    mInstance->readDataPtr.pos=mInstance->string-mInstance->lines[mInstance->curline].str;
     mInstance->curline=oldpos.line;
     mInstance->string=mInstance->lines[mInstance->curline].str+oldpos.pos;
+    mInstance->token=tok;
     if(mInstance->token == COMMA) {
       match(mInstance,COMMA);
       goto rifo;
@@ -4370,8 +4400,6 @@ void doLet(MINIBASIC *mInstance,int8_t matchlet) {
   char id[IDLENGTH];
   IDENT_LEN len;
   const char *p;  
-//#warning prende una parola (minuscola o maiuscola ) da sola senza dire nulla (credo cerchi di vederla come variabile)
-//#warning e non da nemmeno errore su statement maiuscoli sbagliati...  
 //#warning e tipo PI lo prende minuscolo ma le funzioni maiuscole...
   
   if(matchlet) {
@@ -9244,11 +9272,10 @@ void match(MINIBASIC *mInstance,TOKEN_NUM tok) {
 
   mInstance->string=(char *)skipSpaces(mInstance->string);
 
-  mInstance->string += tokenLen(mInstance,mInstance->string, mInstance->token);
+  mInstance->string += tokenLen(mInstance,mInstance->string,mInstance->token);
   mInstance->token = getAToken(mInstance);
   if(mInstance->token == B_ERROR)
 		setError(mInstance,ERR_SYNTAX);
-
 	}
 
 
@@ -9428,9 +9455,9 @@ BSTATIC TOKEN_NUM getAToken(MINIBASIC *mInstance) {
           token - the type of the token read
   Returns: length of the token, or 0 for EOL to prevent it being read past.
 */
-uint8_t tokenLen(MINIBASIC *mInstance,const char *str, TOKEN_NUM token) {
+uint8_t tokenLen(MINIBASIC *mInstance,const char *str,TOKEN_NUM token) {
   IDENT_LEN len = 0;
-  char buff[20];
+  char buff[IDLENGTH+1];
 
   switch(token) {
     case EOS:
@@ -9438,7 +9465,7 @@ uint8_t tokenLen(MINIBASIC *mInstance,const char *str, TOKEN_NUM token) {
     case EOL:
 	  	return 1;
     case VALUE:
-	  	getValue(str, &len);
+	  	getValue(str,&len);
 	  	return len;
 		case DIMSTRID:
 		case DIMFLTID:
@@ -9452,7 +9479,7 @@ uint8_t tokenLen(MINIBASIC *mInstance,const char *str, TOKEN_NUM token) {
 //	  	getId(mInstance,str, buff, &len);
 //	  	return len;
 		case FLTID:
-	  	getId(mInstance,str, buff, &len);
+	  	getId(mInstance,str,buff,&len);
 	  	return len;
     case PITOK:
 	  	return 2;
@@ -9584,7 +9611,7 @@ void getId(MINIBASIC *mInstance,const char *str, char *out, IDENT_LEN *len) {
           src - source string
   Notes: strings are in quotes, double quotes the escape
 */
-static void mystrgrablit(char *dest, const char * src) {
+static void mystrgrablit(char *dest, const char *src) {
   
 	basicAssert(*src == 0x22 /* '\"' */);
   src++;
@@ -9624,7 +9651,7 @@ static const char *mystrend(const char *str, char quote) {
   while(*str) {
     while(*str != quote) {
 	  	if(*str == '\n' || *str == 0)
-				return 0;
+				return NULL;
 	  	str++;
 			}
     if(str[1] == quote)
@@ -9633,7 +9660,7 @@ static const char *mystrend(const char *str, char quote) {
 	  	break;
   	}
 
-  return (char *) (*str ? str : 0);
+  return *str ? str : NULL;
 	}
 
 
