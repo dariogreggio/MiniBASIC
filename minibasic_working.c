@@ -14,17 +14,17 @@
  *          2021: PC_PIC motherboard, PIC32MZ
 *****************************************************************/
 
-// if con doppia condizione non va... e/o dà syntax error. v. MANDEL
-// inserire righe non va ancora/è da fare e run pure (v.)
-//   ci vogliono PARENTESI se doppia condizione! ossia pare <= ha priorità inferiore a AND... SISTEMARE
+// if con doppia condizione non va... e/o dÃ  syntax error. v. MANDEL
+// inserire righe non va ancora/Ã¨ da fare e run pure (v.)
+//   ci vogliono PARENTESI se doppia condizione! ossia pare <= ha prioritÃ  inferiore a AND... SISTEMARE
 // cose tipo BEEP non danno errore se manca parametro...
-// In generale, se c'è un errore in uno statement, non si ferma fino a fine statement e rischia pure di eseguirlo con parametro a cazzo...
+// In generale, se c'Ã¨ un errore in uno statement, non si ferma fino a fine statement e rischia pure di eseguirlo con parametro a cazzo...
 //  bisognerebbe STRONCARE, forse con un longjmp da setError?
 //  verificare se string$ possono restituire NULL o serve emptyString
 //  verificare che succede se SDOK, HDOK ecc non sono validi quando si accede ai vari dischi.. mettere controlli
 //    (anche in command.c)
 
-// REM  SW1 è IND(1,11) , il Led è OUTD(2,14) , PGood è come SW1 (in caso) e EXCEP è OUTD(1,10) .. (partono da 1)
+// REM  SW1 Ã¨ IND(1,11) , il Led Ã¨ OUTD(2,14) , PGood Ã¨ come SW1 (in caso) e EXCEP Ã¨ OUTD(1,10) .. (partono da 1)
 
 #include "../at_winc1500.h"
 #include <ctype.h>
@@ -66,7 +66,7 @@ extern BYTE *RAMdiscArea;
 #define MINIBASIC_COPYRIGHT_STRING "MiniBasic for PIC32MZ v2.2.5 - 6/12/2022\n"
 
 
-#undef stricmp    // per at_winc1500 ... £$%@#
+#undef stricmp    // per at_winc1500 ... Â£$%@#
 #undef strnicmp
 
 extern BYTE eventReceived;
@@ -664,7 +664,7 @@ int minibasic(MINIBASIC *hInstance,const char *scriptName) {
   HDC hDC;
   GetDC(hInstance->hWnd,&hDC);
 	SetTextColor(&hDC,BRIGHTGREEN);
- 	TextOut(&hDC,0,0,MiniBasicCopyrightString);  // c'è anche in WM_CREATE di là, unire...
+ 	TextOut(&hDC,0,0,MiniBasicCopyrightString);  // c'Ã¨ anche in WM_CREATE di lÃ , unire...
 #else
 	SetColors(BRIGHTGREEN,BLACK);
   Cls();
@@ -744,7 +744,7 @@ int minibasic(MINIBASIC *hInstance,const char *scriptName) {
             break;
           case '\x8':
             // backspace
-            commandLine[--commandLineCnt]=0;    // xché cmq l'ho messo in commandline...
+            commandLine[--commandLineCnt]=0;    // xchÃ© cmq l'ho messo in commandline...
             hInstance->Cursor.x--;
             if(commandLineCnt>0) {
               commandLine[--commandLineCnt]=0;
@@ -759,7 +759,7 @@ int minibasic(MINIBASIC *hInstance,const char *scriptName) {
             commandLine[commandLineCnt]=0;            // tolgo LF
             break;
           case '\n':
-            commandLine[--commandLineCnt]=0;            // tolgo CR NO! compatibilità con minibasic-script
+            commandLine[--commandLineCnt]=0;            // tolgo CR NO! compatibilitÃ  con minibasic-script
             myCR(hInstance);
   
             cmdPointer=&commandLine[0];   // per warning...
@@ -1012,7 +1012,7 @@ int basic(MINIBASIC *mInstance,const char *script,BYTE where) {
           // se no SALTA ALLA RIGA DOPO!! unire con ricerca COLON in line() come anche REM ELSE ecc
       		nextstmt.line=mInstance->curline;
           nextstmt.pos=mInstance->string-mInstance->lines[mInstance->curline].str;
-          if(*mInstance->string == '\n') {   // questo lo gestisco qua, perché ERRORHANDLER va prima del resto e CONTINUE può causare un loop!
+          if(*mInstance->string == '\n') {   // questo lo gestisco qua, perchÃ© ERRORHANDLER va prima del resto e CONTINUE puÃ² causare un loop!
             nextstmt.line++; nextstmt.pos=0;
             }
           }
@@ -1122,7 +1122,7 @@ set_line:
 //      if(mInstance->incomingChar[0] =='c' && mInstance->incomingChar[1] == 0b00000001)
 #warning FINIRE modifier qua!
 //        break;
-      if(hitCtrlC(TRUE)) {    // opp. così...
+      if(hitCtrlC(TRUE)) {    // opp. cosÃ¬...
         setError(mInstance,ERR_STOP);
         break;
       }
@@ -1574,7 +1574,7 @@ rifo:
 do_rem:
 		  doRem(mInstance);     // REM va a fondo riga...
 //		  answer.d=STMT_CONTINUE;
-		  answer.line=mInstance->curline;   //..e imposto la riga che segue! (più che altro per On Timer ecc)
+		  answer.line=mInstance->curline;   //..e imposto la riga che segue! (piÃ¹ che altro per On Timer ecc)
 		  answer.pos=0;
       goto fine;
 		  break;
@@ -1756,7 +1756,7 @@ print_file_found:
 		switch(mInstance->token) {
 			default:
 				if(isString(mInstance->token)) {
-					// case STRID QUOTE DIMSTRID, CHRSTRING ecc ma meglio così
+					// case STRID QUOTE DIMSTRID, CHRSTRING ecc ma meglio cosÃ¬
 					str = stringExpr(mInstance);
 		// if errorFlag NON dovrebbe stampare...
 	  			if(str) {
@@ -1942,7 +1942,7 @@ is_value:
 					default:
 						do {
 							/*mInstance->Cursor.x += */ myTextOut(mInstance," ");
-							} while(mInstance->Cursor.x % (ScreenText.cx>25 ? 8 : 4));   // bah, sì
+							} while(mInstance->Cursor.x % (ScreenText.cx>25 ? 8 : 4));   // bah, sÃ¬
 						break;
 					}
 
@@ -2100,7 +2100,7 @@ LINE_NUMBER_STMT_POS_TYPE doOn(MINIBASIC *mInstance) {
 	if(t==ERRORTOK) {
 		match(mInstance,ERRORTOK);
 		getToken(mInstance->string);
-    // GESTIRE anche GOSUB qua?? con un flag negli handler per tornare? ma in effetti è già gestito così in doReturn
+    // GESTIRE anche GOSUB qua?? con un flag negli handler per tornare? ma in effetti Ã¨ giÃ  gestito cosÃ¬ in doReturn
     switch(mInstance->token) {
       case GOTO:
         match(mInstance,GOTO);
@@ -2224,7 +2224,7 @@ void doOpen(MINIBASIC *mInstance) {		// OPEN filename [FOR mode][ACCESS access][
 //		}
   match(mInstance,AS);
 	fileno = integer(mInstance,expr(mInstance));
-  if(fileno<1 || fileno>253 /*mah sì*/) {
+  if(fileno<1 || fileno>253 /*mah sÃ¬*/) {
  		setError(mInstance,ERR_BADVALUE);
     goto open_error;
     }
@@ -2350,14 +2350,14 @@ UDP:      */
 #if defined(USA_USB_HOST_MSD)
 		else if(!strnicmp(str,"USB:",4)) {
       str[0]='E'; str[1]=':'; str[2]=0;
-      goto is_disk;   // bah sì :) :)
+      goto is_disk;   // bah sÃ¬ :) :)
 			}
 		else if(!strnicmp(str,"E:",2)) {
-      goto is_disk;   // bah sì :)
+      goto is_disk;   // bah sÃ¬ :)
 			}
 #endif
 		else if(!strnicmp(str,"A:",2) || !strnicmp(str,"C:",2)) {
-      goto is_disk;   // bah sì :)
+      goto is_disk;   // bah sÃ¬ :)
 			}
 		else {
       SUPERFILE *f;
@@ -2645,7 +2645,7 @@ fine_dir:
       disk_properties.new_request=1;
       if(SYS_FS_DriveSectorGet(NULL,&totalSectors,&freeSectors,&sectorSize)==SYS_FS_RES_SUCCESS) {
         sprintf(buf,"%u file%c %lu KBytes free",totfiles,totfiles==1 ? ' ' : 's',
-                freeSectors* MEDIA_SECTOR_SIZE /* boh dov'è??*//1024); 
+                freeSectors* MEDIA_SECTOR_SIZE /* boh dov'Ã¨??*//1024); 
         myTextOut(mInstance,buf);
         myCR(mInstance);
         }
@@ -2678,7 +2678,7 @@ void doFormat(MINIBASIC *mInstance) {
 #if defined(USA_USB_HOST_MSD)
         if(!USBmemOK)
           goto fine;
-        i=SYS_FS_DriveFormat(NULL, SYS_FS_FORMAT_SFD /*boh sì*/, 4096 /*??*/) == SYS_FS_RES_SUCCESS;
+        i=SYS_FS_DriveFormat(NULL, SYS_FS_FORMAT_SFD /*boh sÃ¬*/, 4096 /*??*/) == SYS_FS_RES_SUCCESS;
         SYS_FS_DriveLabelSet(NULL, label);
   //      i=USBFSformat(1,rand(),str);
   //        printf("Directory of %s","E:\\");    // finire :)
@@ -2926,7 +2926,7 @@ void doSleep(MINIBASIC *mInstance) {
       }
 /*		while(t--) {
 			__delay_ms(1);
-			Yield(mInstance->threadID); // ovviamente dopo di questa il tempo sarà sbagliato, va usato un tipo timeGetTime :)
+			Yield(mInstance->threadID); // ovviamente dopo di questa il tempo sarÃ  sbagliato, va usato un tipo timeGetTime :)
       timeGetTime();
       ClrWdt();
 			}*/
@@ -2971,7 +2971,7 @@ int16_t doRun(MINIBASIC *mInstance) {
     mInstance->errorFlag = ERR_CLEAR;
     }
   else
-    setError(mInstance,ERR_NOSUCHLINE);   // (sopra è gestita a parte)
+    setError(mInstance,ERR_NOSUCHLINE);   // (sopra Ã¨ gestita a parte)
 
 #warning RUN non va... bisogna passare da commandline a basic() ...
 	return mInstance->curline;
@@ -3187,9 +3187,9 @@ void doWebcam(MINIBASIC *mInstance) {
     setError(mInstance,ERR_NOSUCHVARIABLE);
     return;
     }
-  match(mInstance,CPAREN);    // diciam così, WEBCAM sx,sy,w%()
+  match(mInstance,CPAREN);    // diciam cosÃ¬, WEBCAM sx,sy,w%()
   
-  if(mInstance->token == COMMA) {   // può seguire size...
+  if(mInstance->token == COMMA) {   // puÃ² seguire size...
     match(mInstance,COMMA);
     resize=integer(mInstance,expr(mInstance));
     }
@@ -3255,7 +3255,7 @@ void doWebcam(MINIBASIC *mInstance) {
                 }
               }
             }
-          mcu_x++;      // in x ogni blocco è già 16 pixel (con YUV, pare)
+          mcu_x++;      // in x ogni blocco Ã¨ giÃ  16 pixel (con YUV, pare)
           if(mcu_x == JPG_Info.m_MCUSPerRow) {
             mcu_x = 0;
             mcu_y++;
@@ -3398,7 +3398,7 @@ void doPlay(MINIBASIC *mInstance) {
         wsf.channels=wfmt.NumChannels;
         wsf.bytesPerSample=wfmt.BitsPerSample/8;
         wsf.samplesPerSec=wfmt.SamplesPerSec;
-        wsf.bufferSize=wfmt.SamplesPerSec;    // per ora così
+        wsf.bufferSize=wfmt.SamplesPerSec;    // per ora cosÃ¬
         wsf.buffers=1;
         wsf.active=1; 
         if(mInstance->token == COMMA) {
@@ -3448,9 +3448,9 @@ void doPlay(MINIBASIC *mInstance) {
       setError(mInstance,ERR_NOSUCHVARIABLE);
       return;
       }
-  	match(mInstance,CPAREN);    // diciam così, PLAY s%(),1024
+  	match(mInstance,CPAREN);    // diciam cosÃ¬, PLAY s%(),1024
     match(mInstance,COMMA);
-    varsize=integer(mInstance,expr(mInstance)); // andrebbe controllata dimensione... che è stata malloc'ata...
+    varsize=integer(mInstance,expr(mInstance)); // andrebbe controllata dimensione... che Ã¨ stata malloc'ata...
     if(mInstance->token == COMMA) {
       match(mInstance,COMMA);
       wsf.loop = expr(mInstance);
@@ -3459,7 +3459,7 @@ void doPlay(MINIBASIC *mInstance) {
     switch(dimvar->ndims) {
 		  case 1:
         SetAudioSamples2(0,0,&dimvar->d.ival[0],varsize);    // dovrebbe...
-        // però gli array sono di WORD e non di byte...
+        // perÃ² gli array sono di WORD e non di byte...
 				break;
       default:
         setError(mInstance,ERR_BADVALUE);
@@ -3556,7 +3556,7 @@ void doLet(MINIBASIC *mInstance,int8_t matchlet) {
 		}
 
   mInstance->string=skipSpaces(mInstance->string);
-	getId(mInstance, mInstance->string, id, &len);   // devo andare a vedere cosa c'è dopo la stringa/var/label...
+	getId(mInstance, mInstance->string, id, &len);   // devo andare a vedere cosa c'Ã¨ dopo la stringa/var/label...
   p=skipSpaces(mInstance->string+len);
 
   switch(*p) {
@@ -3917,14 +3917,14 @@ LINE_NUMBER_STMT_POS_TYPE doIf(MINIBASIC *mInstance) {
     jumpthen.line=findLine(mInstance,integer(mInstance,expr(mInstance)));
     jumpthen.pos=0;
     if(jumpthen.line == -1) {
-      setError(mInstance,ERR_NOSUCHLINE);   // (sopra è gestita a parte)
+      setError(mInstance,ERR_NOSUCHLINE);   // (sopra Ã¨ gestita a parte)
       }
     if(mInstance->token == ELSE) {
       match(mInstance,ELSE);
       jumpelse.line=findLine(mInstance,integer(mInstance,expr(mInstance)));
       jumpelse.pos=0;
       if(jumpelse.line == -1) {
-        setError(mInstance,ERR_NOSUCHLINE);   // (sopra è gestita a parte)
+        setError(mInstance,ERR_NOSUCHLINE);   // (sopra Ã¨ gestita a parte)
         }
       }
     return condition ? jumpthen : jumpelse;
@@ -3977,7 +3977,7 @@ LINE_NUMBER_STMT_POS_TYPE subGoto(MINIBASIC *mInstance,uint16_t line) {
 
   toline.line = findLine(mInstance,line);
   if(toline.line == -1)
-    setError(mInstance,ERR_NOSUCHLINE);   // (sopra è gestita a parte)
+    setError(mInstance,ERR_NOSUCHLINE);   // (sopra Ã¨ gestita a parte)
   toline.pos=0;
   return toline;
 	}
@@ -4454,7 +4454,7 @@ input_file_found:
   end=strchr(buff, '\n');
   if(!end) {
 //    setError(mInstance,ERR_INPUTTOOLONG);
-// sì?        goto fine_input;
+// sÃ¬?        goto fine_input;
     }
   else *end=0;
   
@@ -4502,7 +4502,7 @@ input_file_found:
   	match(mInstance,COMMA);
 		newbuff=strtok(NULL,",");
     lvalue(mInstance,&lv);
-    // non è perfetto perchè se ci sono meno valori (con ,) che lista di variabili va in SYNTAX ERROR...
+    // non Ã¨ perfetto perchÃ¨ se ci sono meno valori (con ,) che lista di variabili va in SYNTAX ERROR...
     }
 
 fine_input:
@@ -4531,9 +4531,9 @@ void doGet(MINIBASIC *mInstance) {
     setError(mInstance,ERR_NOSUCHVARIABLE);
     return;
     }
-  match(mInstance,CPAREN);    // diciam così, GET #1,s%(),1024
+  match(mInstance,CPAREN);    // diciam cosÃ¬, GET #1,s%(),1024
   match(mInstance,COMMA);
-  varsize=integer(mInstance,expr(mInstance)); // andrebbe controllata dimensione... che è stata malloc'ata...
+  varsize=integer(mInstance,expr(mInstance)); // andrebbe controllata dimensione... che Ã¨ stata malloc'ata...
 
   if(dimvar->ndims != 1) {
     setError(mInstance,ERR_BADVALUE);
@@ -4634,9 +4634,9 @@ void doPut(MINIBASIC *mInstance) {
     setError(mInstance,ERR_NOSUCHVARIABLE);
     return;
     }
-  match(mInstance,CPAREN);    // diciam così, PUT #1,s%(),1024
+  match(mInstance,CPAREN);    // diciam cosÃ¬, PUT #1,s%(),1024
   match(mInstance,COMMA);
-  varsize=integer(mInstance,expr(mInstance)); // andrebbe controllata dimensione... che è stata malloc'ata...
+  varsize=integer(mInstance,expr(mInstance)); // andrebbe controllata dimensione... che Ã¨ stata malloc'ata...
 
   if(dimvar->ndims != 1) {
     setError(mInstance,ERR_BADVALUE);
@@ -4753,7 +4753,7 @@ void doSys(MINIBASIC *mInstance) {
     (*ramfuncEntryPoint)();
     }
 
-//__asm__("MOV _a,W0");		// tendenzialmente "a" si trova già in W0 ! (v. disassembly)
+//__asm__("MOV _a,W0");		// tendenzialmente "a" si trova giÃ  in W0 ! (v. disassembly)
 //__asm__("CALL W0");
 //  _jr_hb();
 //  __asm__("j": "=c" (a));   // VERIFICARE!
@@ -4945,7 +4945,7 @@ void doEllipse(MINIBASIC *mInstance) {
   rx = integer(mInstance,expr(mInstance));
   match(mInstance,COMMA);
   ry = integer(mInstance,expr(mInstance));
-/* boh... non so se è il caso
+/* boh... non so se Ã¨ il caso
     if(pt1.x-rx < 0 || pt1.x+rx > Screen.cx)
 		setError(mInstance, ERR_BADVALUE);
   if(pt1.y-ry < 0 || pt1.y+ry > Screen.cx)
@@ -5003,7 +5003,7 @@ void doCircle(MINIBASIC *mInstance) {
   pt.y = integer(mInstance,expr(mInstance));
   match(mInstance,COMMA);
   r = integer(mInstance,expr(mInstance));
-/* boh... non so se è il caso
+/* boh... non so se Ã¨ il caso
     if(pt1.x-r < 0 || pt1.x+r > Screen.cx)
 		setError(mInstance, ERR_BADVALUE);
   if(pt1.y-r < 0 || pt1.y+r > Screen.cx)
@@ -5097,7 +5097,7 @@ void doPoint(MINIBASIC *mInstance) {
   match(mInstance,COMMA);
   pt.y = integer(mInstance,expr(mInstance));
   
-  if(mInstance->token == COMMA) {   // può seguire size...
+  if(mInstance->token == COMMA) {   // puÃ² seguire size...
     match(mInstance,COMMA);
     size=integer(mInstance,expr(mInstance));
     }
@@ -5221,7 +5221,7 @@ void doFill(MINIBASIC *mInstance) {
   if(!bordermode)
     FloodFill(hDC,pt.x,pt.y,Color24To565(c));
   else
-    FloodFill(hDC,pt.x,pt.y,Color24To565(c));   // QUA non c'è...
+    FloodFill(hDC,pt.x,pt.y,Color24To565(c));   // QUA non c'Ã¨...
 	
   ReleaseDC(mInstance->hWnd,hDC);
 #else
@@ -5307,9 +5307,9 @@ void doBitblt(MINIBASIC *mInstance) {
     setError(mInstance,ERR_NOSUCHVARIABLE);
     return;
     }
-  match(mInstance,CPAREN);    // diciam così, BITBLT x,y,cx,cy,s%()
+  match(mInstance,CPAREN);    // diciam cosÃ¬, BITBLT x,y,cx,cy,s%()
   
-  if(mInstance->token == COMMA) {   // può seguire size...
+  if(mInstance->token == COMMA) {   // puÃ² seguire size...
     match(mInstance,COMMA);
     size=integer(mInstance,expr(mInstance));
     }
@@ -5766,7 +5766,7 @@ enum REL_OPS relOp(MINIBASIC *mInstance) {
 		default:
 			setError(mInstance,ERR_SYNTAX);// TOLTO per la storia dello statement da solo... v. b_error
 
-/* non c'è speranza...
+/* non c'Ã¨ speranza...
   
      {  int i;
     	match(mInstance,mInstance->token);
@@ -5819,7 +5819,7 @@ NUM_TYPE expr(MINIBASIC *mInstance) {
 					match(mInstance,op);			//Check Operator
 					right = term(mInstance);		//Get Value Data
 					left= rop(op,left,right);
-          // ci sarebbe anche irop per interi ma è difficile, direi...
+          // ci sarebbe anche irop per interi ma Ã¨ difficile, direi...
 					}
 				else {
           if(mInstance->errorFlag==ERR_SYNTAX || mInstance->errorFlag==ERR_NOSUCHVARIABLE)    // bah..
@@ -6203,7 +6203,7 @@ NUM_TYPE factor(MINIBASIC *mInstance) {
         case 16:
           {
           SUPERFILE f;
-          f.drive=currDrive;    // per ora così...
+          f.drive=currDrive;    // per ora cosÃ¬...
           answer=SuperFileError(&f);
           }
 					break;
@@ -6358,7 +6358,7 @@ NUM_TYPE factor(MINIBASIC *mInstance) {
 //			match(mInstance,OPAREN);
 //			match(mInstance,CPAREN);
 //    	outd(1,0,1);
-//#warning FINIRE TOUCH RESISTIVO che però passa a windows :)
+//#warning FINIRE TOUCH RESISTIVO che perÃ² passa a windows :)
 //      __delay_ms(50);
 //			answer = inadc(0);
       {
@@ -6525,7 +6525,7 @@ fai_diskspace:
             uint32_t totalSectors,freeSectors,sectorSize;
             if(USBmemOK) {
               if(SYS_FS_DriveSectorGet(NULL, &totalSectors, &freeSectors, &sectorSize) == SYS_FS_RES_SUCCESS) 
-                answer=freeSectors* MEDIA_SECTOR_SIZE /* boh dov'è??*//1024; 
+                answer=freeSectors* MEDIA_SECTOR_SIZE /* boh dov'Ã¨??*//1024; 
               }
             else {
               answer=0;
@@ -7473,7 +7473,7 @@ char *getkeyString(MINIBASIC *mInstance) {
 #if defined(USA_USB_HOST) || defined(USA_USB_SLAVE_CDC)
     SYS_Tasks();
 #ifdef USA_USB_HOST_MSD
-    SYS_FS_Tasks();   // serve, per rapidità...
+    SYS_FS_Tasks();   // serve, per rapiditÃ ...
 #endif
 #else
     APP_Tasks();
@@ -7559,7 +7559,7 @@ leggo_char:
         itoa(buf,i & 0xf,10);
       break;
     case 2:     // leggo connectState
-// v. anche modemInited, cmq se non è init'ed qua dovrebbe dare IDLE che è ok
+// v. anche modemInited, cmq se non Ã¨ init'ed qua dovrebbe dare IDLE che Ã¨ ok
       i = ReadModemStatus(); //
       if(i & 128) {
         i >>= 4;
@@ -8059,7 +8059,7 @@ char *dirString(MINIBASIC *mInstance) {
         }
       else {
         free(result);
-// GESTIRE come di là        if(FSerror() != CE_FILE_NOT_FOUND) {
+// GESTIRE come di lÃ         if(FSerror() != CE_FILE_NOT_FOUND) {
         setError(mInstance,ERR_FILE);
         goto fine;
         }
@@ -8134,7 +8134,7 @@ fine_dir:
       // stampare...totdirs e totsize
       disk_properties.new_request=1;
       if(SYS_FS_DriveSectorGet(NULL,&totalSectors,&freeSectors,&sectorSize)==SYS_FS_RES_SUCCESS) {
-        sprintf(buf,"%lu\r",freeSectors* MEDIA_SECTOR_SIZE /* boh dov'è??*//1024); 
+        sprintf(buf,"%lu\r",freeSectors* MEDIA_SECTOR_SIZE /* boh dov'Ã¨??*//1024); 
         strcat(result,buf);
         }
       break;
@@ -8329,7 +8329,7 @@ int integer(MINIBASIC *mInstance,double x) {
 
   if(isString(mInstance->token))
 		setError(mInstance, ERR_TYPEMISMATCH);
-  if(x < SHRT_MIN || x > USHRT_MAX)   // boh lascio passare cmq 32768..65535, che poi diventa negativo ma è più comodo!
+  if(x < SHRT_MIN || x > USHRT_MAX)   // boh lascio passare cmq 32768..65535, che poi diventa negativo ma Ã¨ piÃ¹ comodo!
 		setError(mInstance, ERR_BADVALUE);
   
 //  if( x != floor(x))
@@ -8989,7 +8989,7 @@ int inkey(void) {
 //  extern struct KEYPRESS keypress;
 
   ReadPMPs(SOUTH_BRIDGE,BIOS_KEYBOARD_READ,keypress,2);
-	//qua faccio così... verificare...
+	//qua faccio cosÃ¬... verificare...
   //e i keypressModif
   return keypress[0] /* | keypress[1]*/;
   
