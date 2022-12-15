@@ -64,7 +64,7 @@ extern APP_DATA appData;
 extern BYTE SDcardOK,USBmemOK,HDOK,FDOK;
 extern BYTE *RAMdiscArea;
 
-#define MINIBASIC_COPYRIGHT_STRING "MiniBasic for PIC32MZ v2.2.8 - 14/12/2022\n"
+#define MINIBASIC_COPYRIGHT_STRING "MiniBasic for PIC32MZ v2.2.8 - 15/12/2022\n"
 
 
 #undef stricmp    // per at_winc1500 ... £$%@#
@@ -3728,8 +3728,12 @@ BSTATIC void doRestore(MINIBASIC *mInstance) {
     return;
     }
   
-  i=integerExpr(mInstance);
-  i=findLine(mInstance,i);
+  if(mInstance->token == VALUE) {
+    i=integerExpr(mInstance);
+    i=findLine(mInstance,i);
+    }
+  else 
+    i=0;
   if(i == -1) {
     setError(mInstance,ERR_NOSUCHLINE);
     return;

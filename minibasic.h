@@ -31,16 +31,16 @@ typedef double NUM_TYPE;
 
 
 typedef union __attribute((packed)) {
-  NUM_TYPE dval;			  /* its value if a real */
-  char    *sval;				/* its value if a string (malloc'ed) */
-  int16_t  ival;	        /* its value if an int */
+  NUM_TYPE dval;			  // its value if a real
+  char    *sval;				// its value if a string (malloc'ed)
+  int16_t  ival;	        // its value if an int
 	} VARIABLEDATA;
 
 typedef struct __attribute((packed)) {
-  VARIABLEDATA d;               /* data in variable */
-  char id[IDLENGTH];				/* id of variable */
+  VARIABLEDATA d;               // data in variable
+  char id[IDLENGTH];			// id of variable 
 //#warning fatto IDLEN a 31 e type uint8 !
-  enum DATATYPE  /*ALIGNMENT in alloc dinamica! */   type;		    /* its type, STRID or FLTID or INTID */
+  enum DATATYPE  /*ALIGNMENT in alloc dinamica! */   type;		    // its type, STRID or FLTID or INTID
 	// unsigned int * fixed_address??
 	} VARIABLE;
 STATIC_ASSERT(!(sizeof(VARIABLE) % 4),0);
@@ -119,8 +119,11 @@ typedef struct __attribute((packed)) _MINIBASIC {
   uint8_t incomingChar[2];
   
   struct __attribute((packed)) EVENT_HANDLER errorHandler,irqHandler,timerHandler;
-  uint8_t filler[1];
+  uint8_t trace;
   
+  LINE_NUMBER_STMT_POS_TYPE readDataPtr;	// per READ/DATA/RESTORE
+  
+  char *script;
   COLORREF Color,ColorBK;
   POINT Cursor;
   GFX_COLOR ColorPalette,ColorPaletteBK;
